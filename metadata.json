@@ -1,0 +1,6 @@
+{
+  "name": "Nabdah - Heart Rhythm",
+  "description": "نبضة - لعبة بقاء وإيقاع عربية ممتعة. تحكّم بحماية نبضات القلب واستمتع بإيقاع النبض الحيوي لتدمير العقبات.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

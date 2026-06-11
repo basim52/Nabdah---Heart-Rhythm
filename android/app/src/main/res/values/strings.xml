@@ -1,0 +1,11 @@
+<resources>
+    <string name="app_name">نبضة - Nabdah</string>
+    <string name="game_title">نَبْضَة • Heart Rhythm</string>
+    <string name="start_single_player">ابدأ الطبيب المنفرد</string>
+    <string name="start_multiplayer">دخول غرفة الطوارئ المشتركة (Multiplayer)</string>
+    <string name="how_to_play">كيف تلعب والتعليمات؟</string>
+    <string name="player_name_label">الاسم الرمزي للمسعف:</string>
+    <string name="heart_hp_label">سلامة صمامات القلب:</string>
+    <string name="game_over_title">توقف النبض - حالة وفاة قلبي</string>
+    <string name="reanimate_heart">إعادة الإنعاش الحيوي</string>
+</resources>
