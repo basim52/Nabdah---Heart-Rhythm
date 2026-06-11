@@ -54,6 +54,17 @@ export const HeartGameCanvas: React.FC<HeartGameCanvasProps> = ({
   const shockwavesRef = useRef<Shockwave[]>([]);
   const processedPerfectsRef = useRef<Set<string>>(new Set());
 
+  // Background blood flow particle system (Vein simulation)
+  interface VeinParticle {
+    angle: number;
+    distance: number;
+    speed: number;
+    size: number;
+    opacity: number;
+    pulseOffset: number;
+  }
+  const veinParticlesRef = useRef<VeinParticle[]>([]);
+
   // Listen to floatingTexts changes to trigger a new perfect shockwave
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -182,6 +193,97 @@ export const HeartGameCanvas: React.FC<HeartGameCanvasProps> = ({
         
         ctx.fillStyle = glowGrad;
         ctx.fillRect(0, 0, w, h);
+        ctx.restore();
+      }
+
+      // HELPER: Compute dynamic venous color smoothly transitioning based on BPM
+      const getVeinColor = (bpm: number, alphaMultiplier: number) => {
+        if (bpm <= 72) {
+          // Healthy deep blood-red/magenta
+          return `rgba(185, 28, 28, ${alphaMultiplier})`;
+        } else if (bpm <= 110) {
+          // Accelerated orange-crimson
+          const ratio = (bpm - 72) / (110 - 72);
+          const rInt = Math.round(185 + (249 - 185) * ratio);
+          const gInt = Math.round(28 + (115 - 28) * ratio);
+          const bInt = Math.round(28 + (22 - 28) * ratio);
+          return `rgba(${rInt}, ${gInt}, ${bInt}, ${alphaMultiplier})`;
+        } else {
+          // Critical golden-yellow hyper pulse state
+          const ratio = Math.min(1, (bpm - 110) / 30);
+          const rInt = Math.round(249 + (251 - 249) * ratio);
+          const gInt = Math.round(115 + (191 - 115) * ratio);
+          const bInt = Math.round(22 + (36 - 22) * ratio);
+          return `rgba(${rInt}, ${gInt}, ${bInt}, ${alphaMultiplier})`;
+        }
+      };
+
+      // Initialize background blood-flow vein particles if first run
+      if (veinParticlesRef.current.length === 0) {
+        const temp: VeinParticle[] = [];
+        for (let i = 0; i < 55; i++) {
+          const channelIdx = Math.floor(Math.random() * 8);
+          const baseAngle = (channelIdx * Math.PI) / 4;
+          temp.push({
+            angle: baseAngle + (Math.random() - 0.5) * 0.05, // flow within the vein width
+            distance: 40 + Math.random() * 190,
+            speed: 0.4 + Math.random() * 1.2,
+            size: 1.0 + Math.random() * 2.2,
+            opacity: 0.12 + Math.random() * 0.48,
+            pulseOffset: Math.random() * Math.PI * 2,
+          });
+        }
+        veinParticlesRef.current = temp;
+      }
+
+      // DRAW BIO-VEIN GLOWING CHANNELS (High-tech blood conduits)
+      if (heartHealth > 0) {
+        ctx.save();
+        // Background vein conduit lines pulse on the beats and glow brighter as the BPM accelerates
+        const conduitAlpha = 0.06 + Math.max(0, (currentBPM - 72) / 72) * 0.12 + (beatScale - 1) * 0.14;
+        const conduitColor = getVeinColor(currentBPM, conduitAlpha);
+        
+        ctx.strokeStyle = conduitColor;
+        ctx.lineWidth = 1.0 + (currentBPM / 72) * 0.8 + (beatScale - 1) * 4.0;
+        
+        for (let angle = 0; angle < Math.PI * 2; angle += Math.PI / 4) {
+          ctx.beginPath();
+          // Spawn from edges of active field and route directly into the beating central chambers
+          ctx.moveTo(cx + Math.cos(angle) * (w * 0.65), cy + Math.sin(angle) * (w * 0.65));
+          ctx.lineTo(cx + Math.cos(angle) * (heartBaseRadius * beatScale * 0.8), cy + Math.sin(angle) * (heartBaseRadius * beatScale * 0.8));
+          ctx.stroke();
+        }
+        ctx.restore();
+
+        // RENDER CYCLING VEIN BLOOD FLOW PARTICLES (Red blood cells marching to the heart)
+        ctx.save();
+        const flowSpeedMultiplier = currentBPM / 72; // Flow speed is directly mapped to active BPM!
+        
+        veinParticlesRef.current.forEach((vp) => {
+          // Flow inwards toward the heart
+          vp.distance -= vp.speed * flowSpeedMultiplier * 0.65;
+          
+          // Recycle cellular elements once they enter the cardiac state
+          const heartLim = heartBaseRadius * beatScale * 0.85;
+          if (vp.distance <= heartLim) {
+            vp.distance = w * 0.52 + Math.random() * w * 0.14; // respawn outwardly
+            const chIdx = Math.floor(Math.random() * 8);
+            vp.angle = (chIdx * Math.PI) / 4 + (Math.random() - 0.5) * 0.05;
+          }
+
+          const px = cx + Math.cos(vp.angle) * vp.distance;
+          const py = cy + Math.sin(vp.angle) * vp.distance;
+
+          // Organic oscillation modeling cell elasticity
+          const pulsingSize = vp.size * (1 + Math.sin(Date.now() / 160 + vp.pulseOffset) * 0.18);
+          // Calculate the exact gradient responsive color
+          const activeCellColor = getVeinColor(currentBPM, vp.opacity);
+
+          ctx.fillStyle = activeCellColor;
+          ctx.beginPath();
+          ctx.arc(px, py, pulsingSize, 0, Math.PI * 2);
+          ctx.fill();
+        });
         ctx.restore();
       }
 

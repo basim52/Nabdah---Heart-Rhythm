@@ -23,6 +23,7 @@ import { GameNode, HitParticle, FloatingText, NodeType, GameState, ScoreRecord }
 import { AudioSynthesizer } from './AudioSynthesizer';
 import { EKGMonitor } from './components/EKGMonitor';
 import { HeartGameCanvas } from './components/HeartGameCanvas';
+import { BpmHistoryChart } from './components/BpmHistoryChart';
 
 export default function App() {
   // Game States
@@ -72,6 +73,9 @@ export default function App() {
 
   // Leaderboard data
   const [leaderboard, setLeaderboard] = useState<ScoreRecord[]>([]);
+
+  // BPM History over time (for the Game Over graph)
+  const [bpmHistory, setBpmHistory] = useState<number[]>([]);
 
   // Sound Engine ref
   const audioSynthRef = useRef<AudioSynthesizer>(new AudioSynthesizer());
@@ -716,6 +720,20 @@ export default function App() {
     return () => clearInterval(timer);
   }, [gameState, stabilizationTimeLeft]);
 
+  // Periodically record BPM values during the active game session (every 1.5 seconds)
+  useEffect(() => {
+    if (gameState !== 'PLAYING') return;
+
+    const recorder = setInterval(() => {
+      setBpmHistory((prev) => {
+        // Capture latest BPM from synchronized ref safely
+        return [...prev, bpmRef.current];
+      });
+    }, 1500);
+
+    return () => clearInterval(recorder);
+  }, [gameState]);
+
   // Spark debris burst generator
   const createExplosionDebris = (cx: number, cy: number, color: string, count: number) => {
     // Converts hex colors to rgb format for alpha handling
@@ -777,6 +795,7 @@ export default function App() {
     setCombo(0);
     setMaxCombo(0);
     setCurrentBPM(72);
+    setBpmHistory([72]);
     setAccuracy({ total: 0, perfect: 0 });
     setNodes([]);
     setParticles([]);
@@ -1230,6 +1249,9 @@ export default function App() {
                 <span className="font-mono font-bold text-cyan-400">{calculatedAcc}%</span>
               </div>
             </div>
+
+            {/* D3-based Cardiac Rate (BPM) Progression Chart */}
+            <BpmHistoryChart history={bpmHistory} />
 
             {/* Interactive leaderboards panel */}
             <div className="backdrop-blur-md bg-white/5 border border-white/10 rounded-2xl p-4 text-right">
