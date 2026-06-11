@@ -82,9 +82,9 @@ export default function App() {
   // Sound Engine ref
   const audioSynthRef = useRef<AudioSynthesizer>(new AudioSynthesizer());
 
-  // PeerJS Connection refs for serverless co-op (works anywhere, including Vercel!)
-  const peerRef = useRef<any>(null);
-  const connRef = useRef<any>(null);
+  // WebSocket Server Sync Connection refs with automated heartbeat
+  const wsRef = useRef<WebSocket | null>(null);
+  const pingIntervalRef = useRef<any>(null);
 
   // Game configuration & Dynamic scales
   const activeLoopRef = useRef<number | null>(null);
@@ -125,74 +125,17 @@ export default function App() {
     audioSynthRef.current.startFlatline();
     setIsMultiplayer(false);
     
-    if (connRef.current) {
-      connRef.current.close();
-      connRef.current = null;
+    if (wsRef.current) {
+      wsRef.current.close();
+      wsRef.current = null;
+    }
+    if (pingIntervalRef.current) {
+      clearInterval(pingIntervalRef.current);
+      pingIntervalRef.current = null;
     }
   };
 
-  // PeerJS match joining as client (Player 2)
-  const connectAsClient = (code: string) => {
-    const PeerClass = (window as any).Peer;
-    if (!PeerClass) {
-      setLobbyError('فشل تحميل محرك الشبكة المباشرة. يرجى إعادة المحاولة.');
-      setIsJoiningLobby(false);
-      return;
-    }
-
-    if (peerRef.current) {
-      peerRef.current.destroy();
-      peerRef.current = null;
-    }
-
-    // Connect with an assigned ID
-    const peer = new PeerClass({ debug: 1 });
-    peerRef.current = peer;
-
-    peer.on('open', () => {
-      const hostId = `nabdah-room-${code.toUpperCase()}`;
-      const conn = peer.connect(hostId, { reliable: true });
-      connRef.current = conn;
-
-      conn.on('open', () => {
-        conn.send({
-          type: 'JOIN_ROOM',
-          playerName: playerName.trim() || 'نبّاض'
-        });
-      });
-
-      conn.on('data', (payload: any) => {
-        if (payload && payload.type === 'START_MATCH') {
-          setIsHost(false);
-          setPartnerName(payload.partnerName);
-          setLobbyPlayers(payload.players);
-          setIsMultiplayer(true);
-          setIsJoiningLobby(false);
-          setGameState('PLAYING');
-          startGame(true);
-        } else if (payload && payload.type === 'GAME_ACTION') {
-          handleIncomingBroadcast(payload.data);
-        }
-      });
-
-      conn.on('close', () => {
-        handleIncomingDisconnect();
-      });
-
-      conn.on('error', (err: any) => {
-        console.error("Client connect error", err);
-        handleIncomingDisconnect();
-      });
-    });
-
-    peer.on('error', (err: any) => {
-      console.error("Client peer error:", err);
-      setLobbyError('فشل الاتصال بالغرفة. يرجى محاولة رمز مختلف.');
-      setIsJoiningLobby(false);
-    });
-  };
-
-  // Real-time peer co-op matchmaking functions using PeerJS
+  // Real-time peer co-op matchmaking functions using secure WebSockets
   const connectToLobby = (code: string) => {
     if (!code.trim()) {
       setLobbyError('الرجاء إدخال رمز الغرفة أولاً');
@@ -202,92 +145,116 @@ export default function App() {
     setLobbyError('');
     setIsJoiningLobby(true);
 
-    if (connRef.current) {
-      connRef.current.close();
-      connRef.current = null;
+    if (pingIntervalRef.current) {
+      clearInterval(pingIntervalRef.current);
+      pingIntervalRef.current = null;
     }
-    if (peerRef.current) {
-      peerRef.current.destroy();
-      peerRef.current = null;
-    }
-
-    const PeerClass = (window as any).Peer;
-    if (!PeerClass) {
-      setLobbyError('فشل تحميل محرك الشبكة المباشرة. تأكد من جودة الإنترنت.');
-      setIsJoiningLobby(false);
-      return;
+    if (wsRef.current) {
+      wsRef.current.close();
+      wsRef.current = null;
     }
 
-    // Attempt to host first
-    const hostPeerId = `nabdah-room-${cleanCode}`;
-    const peer = new PeerClass(hostPeerId, { debug: 1 });
-    peerRef.current = peer;
+    // Determine the accurate WebSocket URL
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    let baseHost = window.location.host;
+    
+    // Fallback to the live dedicated Google Cloud Run WebSocket engine if served statically on Vercel or GitHub Pages
+    if (
+      baseHost.includes('vercel.app') || 
+      baseHost.includes('github.io') || 
+      (!baseHost.includes('localhost') && !baseHost.includes('run.app'))
+    ) {
+      baseHost = 'ais-pre-jo2ica7mgzozj6r5jt66bf-287964971170.europe-west2.run.app';
+    }
 
-    peer.on('open', () => {
-      setIsHost(true);
-      setLobbyPlayers([playerName.trim() || 'نبّاض']);
-      
-      peer.on('connection', (conn: any) => {
-        if (connRef.current && connRef.current.open) {
-          conn.close();
-          return;
-        }
+    const wsUrl = `${protocol}//${baseHost}`;
+    
+    try {
+      const ws = new WebSocket(wsUrl);
+      wsRef.current = ws;
 
-        connRef.current = conn;
+      ws.onopen = () => {
+        // Submit join credentials
+        ws.send(JSON.stringify({
+          type: 'JOIN_ROOM',
+          roomCode: cleanCode,
+          playerName: playerName.trim() || 'نبّاض'
+        }));
 
-        conn.on('data', (payload: any) => {
-          if (payload && payload.type === 'JOIN_ROOM') {
-            const clientName = payload.playerName || 'مسعف آخر';
-            setPartnerName(clientName);
-            setLobbyPlayers([playerName.trim() || 'نبّاض', clientName]);
-
-            // Acknowledge and notify to start game
-            conn.send({
-              type: 'START_MATCH',
-              isHost: false,
-              partnerName: playerName.trim() || 'نبّاض',
-              players: [playerName.trim() || 'نبّاض', clientName]
-            });
-
-            // Start match locally as Host
-            setIsHost(true);
-            setIsMultiplayer(true);
-            setIsJoiningLobby(false);
-            setGameState('PLAYING');
-            startGame(true);
-          } else if (payload && payload.type === 'GAME_ACTION') {
-            handleIncomingBroadcast(payload.data);
+        // Keep WebSocket active using a 15-second heartbeat
+        pingIntervalRef.current = setInterval(() => {
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: 'PING' }));
           }
-        });
+        }, 15000);
+      };
 
-        conn.on('close', () => {
-          handleIncomingDisconnect();
-        });
+      ws.onmessage = (event) => {
+        try {
+          const payload = JSON.parse(event.data);
+          const { type, playerName: senderName, players, isHost: hostStatus, partnerName: oppName, data, message } = payload;
 
-        conn.on('error', () => {
-          handleIncomingDisconnect();
-        });
-      });
-    });
+          switch (type) {
+            case 'PLAYER_JOINED':
+              setLobbyPlayers(players);
+              setIsHost(hostStatus);
+              break;
 
-    peer.on('error', (err: any) => {
-      if (err.type === 'unavailable-id') {
-        // Host exists, join as client!
-        connectAsClient(cleanCode);
-      } else {
-        console.error("Peer host error:", err);
-        setLobbyError('حدث خطأ في الشبكة المباشرة. يرجى تجربة رمز آخر.');
+            case 'START_MATCH':
+              setIsHost(hostStatus);
+              setPartnerName(oppName);
+              setIsMultiplayer(true);
+              setIsJoiningLobby(false);
+              setGameState('PLAYING');
+              startGame(true);
+              break;
+
+            case 'ACTION_BROADCAST':
+              handleIncomingBroadcast(data);
+              break;
+
+            case 'PARTNER_DISCONNECTED':
+              handleIncomingDisconnect();
+              break;
+
+            case 'ERROR':
+              setLobbyError(message || 'حدث خطأ غير متوقع.');
+              setIsJoiningLobby(false);
+              ws.close();
+              break;
+          }
+        } catch (e) {
+          console.error("WS parse payload error:", e);
+        }
+      };
+
+      ws.onerror = (err) => {
+        console.error("Socket error detail:", err);
+        setLobbyError('فشل الاتصال بالغرفة. يرجى التحقق من جودة الاتصال بالإنترنت.');
         setIsJoiningLobby(false);
-      }
-    });
+      };
+
+      ws.onclose = () => {
+        setIsJoiningLobby(false);
+        if (pingIntervalRef.current) {
+          clearInterval(pingIntervalRef.current);
+          pingIntervalRef.current = null;
+        }
+      };
+
+    } catch (err) {
+      console.error("WebSocket setup failed:", err);
+      setLobbyError('فشل تقني أثناء تهيئة لعبة الشبكة.');
+      setIsJoiningLobby(false);
+    }
   };
 
   const sendGameAction = (data: any) => {
-    if (connRef.current && connRef.current.open) {
-      connRef.current.send({
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({
         type: 'GAME_ACTION',
         data
-      });
+      }));
     }
   };
 
@@ -927,13 +894,13 @@ export default function App() {
 
     if (!isMult) {
       setIsMultiplayer(false);
-      if (connRef.current) {
-        connRef.current.close();
-        connRef.current = null;
+      if (wsRef.current) {
+        wsRef.current.close();
+        wsRef.current = null;
       }
-      if (peerRef.current) {
-        peerRef.current.destroy();
-        peerRef.current = null;
+      if (pingIntervalRef.current) {
+        clearInterval(pingIntervalRef.current);
+        pingIntervalRef.current = null;
       }
     }
 
@@ -953,13 +920,13 @@ export default function App() {
   const handleBackToMenu = () => {
     audioSynthRef.current.stopFlatline();
     setGameState('START');
-    if (connRef.current) {
-      connRef.current.close();
-      connRef.current = null;
+    if (wsRef.current) {
+      wsRef.current.close();
+      wsRef.current = null;
     }
-    if (peerRef.current) {
-      peerRef.current.destroy();
-      peerRef.current = null;
+    if (pingIntervalRef.current) {
+      clearInterval(pingIntervalRef.current);
+      pingIntervalRef.current = null;
     }
     setIsMultiplayer(false);
   };
