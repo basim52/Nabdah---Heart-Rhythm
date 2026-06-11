@@ -44,9 +44,24 @@ async function startServer() {
   const wss = new WebSocketServer({ noServer: true });
 
   httpServer.on("upgrade", (request, socket, head) => {
-    wss.handleUpgrade(request, socket, head, (ws) => {
-      wss.emit("connection", ws, request);
-    });
+    try {
+      const url = new URL(request.url || "", `http://${request.headers.host || "localhost"}`);
+      if (url.pathname === "/ws-coop") {
+        wss.handleUpgrade(request, socket, head, (ws) => {
+          wss.emit("connection", ws, request);
+        });
+      } else {
+        // Allow Vite or other websocket upgrade requests (e.g. HMR) to bypass this
+      }
+    } catch (e) {
+      console.error("WS upgrade parsing failed, doing basic upgrade fallback:", e);
+      // Fallback
+      if (request.url?.includes("/ws-coop")) {
+        wss.handleUpgrade(request, socket, head, (ws) => {
+          wss.emit("connection", ws, request);
+        });
+      }
+    }
   });
 
   wss.on("connection", (ws: WebSocket) => {
