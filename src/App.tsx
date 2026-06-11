@@ -1226,7 +1226,7 @@ export default function App() {
         {gameState === 'PLAYING' && (
           <div id="playing-module" className="flex flex-col gap-4 animate-fade-in font-sans">
             
-            {/* Multiplayer Peer Connection Badge */}
+            {/* Multiplayer WebSocket Connection Badge */}
             {isMultiplayer && (
               <div className="flex items-center justify-between px-3.5 py-1.5 bg-amber-500/10 border border-amber-500/20 rounded-xl my-0.5">
                 <span className="text-[10px] text-white/50">رمز الغرفة: <strong className="text-[#fbbf24] font-mono">{roomCode}</strong></span>
