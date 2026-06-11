@@ -61,6 +61,8 @@ export default function App() {
   const [lobbyPlayers, setLobbyPlayers] = useState<string[]>([]);
   const [isJoiningLobby, setIsJoiningLobby] = useState<boolean>(false);
   const [lobbyError, setLobbyError] = useState<string>('');
+  const [copiedLink, setCopiedLink] = useState<boolean>(false);
+  const [isDirectJoined, setIsDirectJoined] = useState<boolean>(false);
 
   // Game Modes (Endless vs Timed Challenge)
   const [gameMode, setGameMode] = useState<'ENDLESS' | 'TIMED'>('ENDLESS');
@@ -101,6 +103,20 @@ export default function App() {
   bpmRef.current = currentBPM;
   stabilizationActiveRef.current = stabilizationTimeLeft > 0;
 
+  // Copy room invite link to clipboard for direct entry
+  const handleCopyInviteLink = () => {
+    if (!roomCode.trim()) return;
+    const cleanCode = roomCode.trim().toUpperCase();
+    const inviteLink = `${window.location.origin}${window.location.pathname}?room=${cleanCode}`;
+    
+    navigator.clipboard.writeText(inviteLink).then(() => {
+      setCopiedLink(true);
+      setTimeout(() => setCopiedLink(false), 2000);
+    }).catch((err) => {
+      console.error("Failed to copy link", err);
+    });
+  };
+
   // Real-time peer co-op WS matching functions
   const connectToLobby = (code: string) => {
     if (!code.trim()) {
@@ -111,7 +127,16 @@ export default function App() {
     setIsJoiningLobby(true);
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}`;
+    let wsUrl = `${protocol}//${window.location.host}`;
+    
+    // Redirect WebSocket connection to the live Cloud Run backend if hosted on Vercel or other static hosts
+    if (
+      window.location.host.includes('vercel.app') || 
+      window.location.host.includes('github.io') ||
+      !window.location.host.includes('localhost') && !window.location.host.includes('run.app')
+    ) {
+      wsUrl = 'wss://ais-pre-jo2ica7mgzozj6r5jt66bf-287964971170.europe-west2.run.app';
+    }
     
     if (wsRef.current) {
       wsRef.current.close();
@@ -208,7 +233,7 @@ export default function App() {
     }
   };
 
-  // Load Leaderboard on mount
+  // Load Leaderboard on mount and handle direct invite URLs
   useEffect(() => {
     const rawScores = localStorage.getItem('nabdah_leaderboard_v1');
     if (rawScores) {
@@ -217,6 +242,25 @@ export default function App() {
       } catch (e) {
         console.error("Score load failed", e);
       }
+    }
+
+    // Auto-join via direct room link if '?room=EMER' parameter is present
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const inviteCode = params.get('room') || params.get('code') || params.get('invite');
+      if (inviteCode && inviteCode.trim()) {
+        const cleanCode = inviteCode.trim().slice(0, 4).toUpperCase();
+        setRoomCode(cleanCode);
+        setIsDirectJoined(true);
+        
+        // Brief timeout ensures React states and references have established fully
+        const timer = setTimeout(() => {
+          connectToLobby(cleanCode);
+        }, 800);
+        return () => clearTimeout(timer);
+      }
+    } catch (err) {
+      console.error("Failed parsing invite link query", err);
     }
   }, []);
 
@@ -881,6 +925,14 @@ export default function App() {
         {gameState === 'START' && (
           <div id="start-screen" className="flex flex-col gap-5 py-3 animate-fade-in text-center">
             
+            {/* Direct Link Invite Auto-connection Feedback */}
+            {isDirectJoined && isJoiningLobby && (
+              <div id="direct-invite-alert" className="backdrop-blur-md bg-amber-500/10 border border-amber-500/30 text-amber-400 rounded-2xl p-3 text-center text-xs animate-pulse flex items-center justify-center gap-2 font-sans mb-1 shadow-[0_0_15px_rgba(245,158,11,0.15)]">
+                <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping inline-block" />
+                <span>تم الكشف عن دعوة انضمام مباشرة للغرفة <strong className="font-mono text-white bg-amber-500/20 px-1.5 py-0.5 rounded border border-amber-500/30">{roomCode}</strong>! جاري تسجيل الدخول كمسعف ثانٍ تلقائياً...</span>
+              </div>
+            )}
+
             {/* Pulsating Logo Banner */}
             <div className="my-2 relative flex flex-col items-center">
               <div className="absolute -inset-1 bg-red-500/20 rounded-full blur-2xl animate-pulse w-28 h-28 -z-10" />
@@ -953,6 +1005,22 @@ export default function App() {
                     {isJoiningLobby ? 'جاري الاتصال...' : 'انضمام كمسعف ثانٍ'}
                   </button>
                 </div>
+
+                {roomCode.trim().length > 0 && (
+                  <div className="mt-2 text-center animate-fade-in">
+                    <button
+                      type="button"
+                      onClick={handleCopyInviteLink}
+                      className="inline-flex items-center gap-1.5 text-[10px] text-[#fbbf24] bg-amber-500/10 border border-amber-500/20 rounded-lg px-2.5 py-1.5 w-full justify-center transition-all hover:bg-amber-500/20 active:scale-95 cursor-pointer font-sans"
+                    >
+                      <Share2 className="w-3.5 h-3.5" />
+                      <span>{copiedLink ? '✓ تم نسخ رابط الدعوة المباشرة!' : 'نسخ رابط الدعوة المباشرة للغرفة'}</span>
+                    </button>
+                    <p className="text-[9px] text-white/40 mt-1">
+                      أرسل هذا الرابط لزميلك ليدخل الغرفة مباشرة دون الحاجة لكتابة الرمز!
+                    </p>
+                  </div>
+                )}
 
                 {lobbyPlayers.length > 0 && isJoiningLobby && (
                   <div className="mt-2.5 p-2 bg-amber-500/10 border border-amber-500/20 rounded-xl text-center">
