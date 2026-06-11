@@ -16,7 +16,6 @@ import {
   HeartHandshake, 
   Activity, 
   ArrowLeft,
-  Share2,
   Zap
 } from 'lucide-react';
 import { GameNode, HitParticle, FloatingText, NodeType, GameState, ScoreRecord } from './types';
@@ -53,18 +52,7 @@ export default function App() {
   const [triggerBeatSign, setTriggerBeatSign] = useState<boolean>(false); // Triggers EKG spike
   const [volume, setVolume] = useState<number>(0.6);
 
-  // Multiplayer Room and Real-Time State variables
-  const [isMultiplayer, setIsMultiplayer] = useState<boolean>(false);
-  const [roomCode, setRoomCode] = useState<string>('');
-  const [isHost, setIsHost] = useState<boolean>(false);
-  const [partnerName, setPartnerName] = useState<string>('');
-  const [lobbyPlayers, setLobbyPlayers] = useState<string[]>([]);
-  const [isJoiningLobby, setIsJoiningLobby] = useState<boolean>(false);
-  const [lobbyError, setLobbyError] = useState<string>('');
-  const [copiedLink, setCopiedLink] = useState<boolean>(false);
-  const [isDirectJoined, setIsDirectJoined] = useState<boolean>(false);
-
-  // Game Modes (Endless vs Timed Challenge)
+  // Single Player Game Modes (Endless vs Timed Challenge)
   const [gameMode, setGameMode] = useState<'ENDLESS' | 'TIMED'>('ENDLESS');
   const [timeLeft, setTimeLeft] = useState<number>(60);
   const [isTimeOutEnd, setIsTimeOutEnd] = useState<boolean>(false);
@@ -82,33 +70,6 @@ export default function App() {
   // Sound Engine ref
   const audioSynthRef = useRef<AudioSynthesizer>(new AudioSynthesizer());
 
-  // WebSocket Connection refs for robust co-op (uses our Express container server)
-  const connRef = useRef<WebSocket | null>(null);
-  const heartbeatRef = useRef<any>(null);
-
-  // WebSocket heartbeat to keep container connection open and active
-  const startWSHeartbeat = (ws: WebSocket) => {
-    if (heartbeatRef.current) {
-      clearInterval(heartbeatRef.current);
-    }
-    heartbeatRef.current = setInterval(() => {
-      if (ws && ws.readyState === WebSocket.OPEN) {
-        try {
-          ws.send(JSON.stringify({ type: 'PING' }));
-        } catch (e) {
-          console.warn("WS heartbeat PING failed:", e);
-        }
-      }
-    }, 20000);
-  };
-  
-  const stopWSHeartbeat = () => {
-    if (heartbeatRef.current) {
-      clearInterval(heartbeatRef.current);
-      heartbeatRef.current = null;
-    }
-  };
-
   // Game configuration & Dynamic scales
   const activeLoopRef = useRef<number | null>(null);
   const lastSpawnTimeRef = useRef<number>(0);
@@ -117,194 +78,11 @@ export default function App() {
   const bpmRef = useRef<number>(currentBPM);
   const isPlayingRef = useRef<boolean>(false);
 
-  // Frame safe reference anchors for high-frequency loops
-  const isMultiplayerRef = useRef<boolean>(false);
-  const isHostRef = useRef<boolean>(false);
-
-  isMultiplayerRef.current = isMultiplayer;
-  isHostRef.current = isHost;
   scoreRef.current = score;
   bpmRef.current = currentBPM;
   stabilizationActiveRef.current = stabilizationTimeLeft > 0;
 
-  // Copy room invite link to clipboard for direct entry
-  const handleCopyInviteLink = () => {
-    if (!roomCode.trim()) return;
-    const cleanCode = roomCode.trim().toUpperCase();
-    const inviteLink = `${window.location.origin}${window.location.pathname}?room=${cleanCode}`;
-    
-    navigator.clipboard.writeText(inviteLink).then(() => {
-      setCopiedLink(true);
-      setTimeout(() => setCopiedLink(false), 2000);
-    }).catch((err) => {
-      console.error("Failed to copy link", err);
-    });
-  };
-
-  // Connection disconnect handler
-  const handleIncomingDisconnect = () => {
-    spawnFloatingText('🚨 انقطع اتصال زميلك!', 190, 150, '#ef4444', true);
-    setGameState('GAMEOVER');
-    audioSynthRef.current.startFlatline();
-    setIsMultiplayer(false);
-    
-    stopWSHeartbeat();
-    if (connRef.current) {
-      try {
-        connRef.current.close();
-      } catch (err) {}
-      connRef.current = null;
-    }
-  };
-
-  const getWebSocketUrl = () => {
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    // Use the exact window.location.host with a dedicated /ws-coop path to avoid dev server HMR WebSocket conflicts
-    return `${protocol}//${window.location.host}/ws-coop`;
-  };
-
-  // Real-time Cloud-hosted WebSocket matchmaking & Co-op Sync
-  const connectToLobby = async (code: string) => {
-    if (!code.trim()) {
-      setLobbyError('الرجاء إدخال رمز الغرفة أولاً');
-      return;
-    }
-    const cleanCode = code.toUpperCase().trim();
-    setLobbyError('');
-    setIsJoiningLobby(true);
-
-    stopWSHeartbeat();
-    if (connRef.current) {
-      try {
-        connRef.current.close();
-      } catch (err) {}
-      connRef.current = null;
-    }
-
-    setLobbyError('جاري الاتصال بخادم نبضة السحابي والبحث عن طبيب مسعف آخر...');
-
-    try {
-      const wsUrl = getWebSocketUrl();
-      console.log("Connecting WS to:", wsUrl);
-      const ws = new WebSocket(wsUrl);
-      connRef.current = ws;
-
-      ws.onopen = () => {
-        console.log("Connected to Nabda Signaling Room:", cleanCode);
-        startWSHeartbeat(ws);
-        
-        // Join the targeted co-op room
-        ws.send(JSON.stringify({
-          type: 'JOIN_ROOM',
-          roomCode: cleanCode,
-          playerName: playerName.trim() || 'نبّاض'
-        }));
-      };
-
-      ws.onmessage = (event) => {
-        try {
-          const payload = JSON.parse(event.data);
-          const { type, players, isHost: receivedIsHost, partnerName: partner, data, message } = payload;
-
-          switch (type) {
-            case 'PLAYER_JOINED': {
-              setIsHost(receivedIsHost);
-              setLobbyPlayers(players || [playerName.trim() || 'نبّاض']);
-              if (players && players.length === 1) {
-                setLobbyError('تم حجز الغرفة بنجاح! في انتظار انضمام المسعف الآخر...');
-              } else {
-                setLobbyError('مسعف الطوارئ الآخر متواجد بالغرفة، جاري المزامنة لتهيئة الصدمات...');
-              }
-              break;
-            }
-
-            case 'START_MATCH': {
-              setIsHost(payload.isHost);
-              setPartnerName(payload.partnerName || 'مسعف آخر');
-              setIsMultiplayer(true);
-              setIsJoiningLobby(false);
-              setGameState('PLAYING');
-              startGame(true);
-              break;
-            }
-
-            case 'ACTION_BROADCAST': {
-              if (data) {
-                handleIncomingBroadcast(data);
-              }
-              break;
-            }
-
-            case 'PARTNER_DISCONNECTED': {
-              handleIncomingDisconnect();
-              break;
-            }
-
-            case 'ERROR': {
-              setLobbyError(message || 'فشل الانضمام للغرفة.');
-              setIsJoiningLobby(false);
-              ws.close();
-              break;
-            }
-          }
-        } catch (e) {
-          console.error("Parsed payload error", e);
-        }
-      };
-
-      ws.onclose = () => {
-        console.log("Nabda Signaling WS closed");
-        stopWSHeartbeat();
-        if (isMultiplayerRef.current) {
-          handleIncomingDisconnect();
-        }
-      };
-
-      ws.onerror = (err) => {
-        console.error("WS general communication error:", err);
-        if (!isMultiplayerRef.current) {
-          setLobbyError('خطأ اتصال: حدث انقطاع في خادم الإشارات العام. الرجاء المحاولة مجدداً.');
-          setIsJoiningLobby(false);
-        }
-      };
-
-    } catch (err) {
-      console.error("WebSocket setup failed:", err);
-      setLobbyError('فشل تهيئة بروتوكول الاتصال المباشر بالخادم السحابي.');
-      setIsJoiningLobby(false);
-    }
-  };
-
-  const sendGameAction = (data: any) => {
-    if (connRef.current && connRef.current.readyState === WebSocket.OPEN) {
-      connRef.current.send(JSON.stringify({
-        type: 'GAME_ACTION',
-        data
-      }));
-    }
-  };
-
-  const handleIncomingBroadcast = (action: any) => {
-    switch (action.type) {
-      case 'SPAWN_THREAT':
-        spawnThreatNode(action);
-        break;
-
-      case 'TAP_NODE':
-        executeLocalTap(action.id, action.isPerfect, action.tapX, action.tapY);
-        break;
-
-      case 'MISS_NODE':
-        executeLocalMiss(action.id);
-        break;
-
-      case 'BPM_CHANGE':
-        setCurrentBPM(action.bpm);
-        break;
-    }
-  };
-
-  // Load Leaderboard on mount and handle direct invite URLs
+  // Load Leaderboard on mount
   useEffect(() => {
     const rawScores = localStorage.getItem('nabdah_leaderboard_v1');
     if (rawScores) {
@@ -313,25 +91,6 @@ export default function App() {
       } catch (e) {
         console.error("Score load failed", e);
       }
-    }
-
-    // Auto-join via direct room link if '?room=EMER' parameter is present
-    try {
-      const params = new URLSearchParams(window.location.search);
-      const inviteCode = params.get('room') || params.get('code') || params.get('invite');
-      if (inviteCode && inviteCode.trim()) {
-        const cleanCode = inviteCode.trim().slice(0, 4).toUpperCase();
-        setRoomCode(cleanCode);
-        setIsDirectJoined(true);
-        
-        // Brief timeout ensures React states and references have established fully
-        const timer = setTimeout(() => {
-          connectToLobby(cleanCode);
-        }, 800);
-        return () => clearTimeout(timer);
-      }
-    } catch (err) {
-      console.error("Failed parsing invite link query", err);
     }
   }, []);
 
@@ -429,9 +188,7 @@ export default function App() {
       const adaptiveSpawnInterval = Math.max(650, 2200 - (currentScore * 0.12));
       
       if (now - lastSpawnTimeRef.current > adaptiveSpawnInterval) {
-        if (!isMultiplayerRef.current || isHostRef.current) {
-          spawnThreatNode();
-        }
+        spawnThreatNode();
         lastSpawnTimeRef.current = now;
       }
 
@@ -440,9 +197,6 @@ export default function App() {
       const targetBPM = Math.min(144, 72 + Math.floor(currentScore / 250) * 4);
       if (targetBPM !== bpmRef.current) {
         setCurrentBPM(targetBPM);
-        if (isMultiplayerRef.current && isHostRef.current) {
-          sendGameAction({ type: 'BPM_CHANGE', bpm: targetBPM });
-        }
       }
 
       // 3. Move nodes towards center heart
@@ -578,18 +332,6 @@ export default function App() {
         initialHealth = 1;
       }
 
-      if (isMultiplayerRef.current && isHostRef.current) {
-        sendGameAction({
-          type: 'SPAWN_THREAT',
-          id,
-          angle: randomAngle,
-          threatType: type,
-          radius,
-          maxHealth: initialHealth,
-          color,
-          speed
-        });
-      }
     }
 
     const newNode: GameNode = {
@@ -613,15 +355,6 @@ export default function App() {
   // Triggers tap interaction
   const handleTapNode = (id: string, isPerfect: boolean, tapX: number, tapY: number) => {
     executeLocalTap(id, isPerfect, tapX, tapY);
-    if (isMultiplayerRef.current) {
-      sendGameAction({
-        type: 'TAP_NODE',
-        id,
-        isPerfect,
-        tapX,
-        tapY
-      });
-    }
   };
 
   const executeLocalTap = (id: string, isPerfect: boolean, tapX: number, tapY: number) => {
@@ -693,18 +426,7 @@ export default function App() {
 
   // Triggered when threat breaks the heart boundary
   const handleMissNode = (id: string) => {
-    // In co-op multiplayer, ONLY the Host processes and dictates misses
-    if (isMultiplayerRef.current) {
-      if (isHostRef.current) {
-        executeLocalMiss(id);
-        sendGameAction({
-          type: 'MISS_NODE',
-          id
-        });
-      }
-    } else {
-      executeLocalMiss(id);
-    }
+    executeLocalMiss(id);
   };
 
   const executeLocalMiss = (id: string) => {
@@ -894,7 +616,7 @@ export default function App() {
   };
 
   // Safe game initialisation
-  const startGame = async (isMult: boolean = false, selectedMode: 'ENDLESS' | 'TIMED' = 'ENDLESS') => {
+  const startGame = async (selectedMode: 'ENDLESS' | 'TIMED' = 'ENDLESS') => {
     // Init Audio Context safely via user click gesture
     await audioSynthRef.current.initialize();
     
@@ -918,17 +640,6 @@ export default function App() {
     lastSpawnTimeRef.current = Date.now();
     lastBeatTimeRef.current = Date.now();
 
-    if (!isMult) {
-      setIsMultiplayer(false);
-      stopWSHeartbeat();
-      if (connRef.current) {
-        try {
-          connRef.current.close();
-        } catch (err) {}
-        connRef.current = null;
-      }
-    }
-
     // Persist player name
     localStorage.setItem('nabdah_player_name', playerName);
 
@@ -939,20 +650,12 @@ export default function App() {
   const restartGame = async () => {
     // Turn off continuous flatline alarm tone
     audioSynthRef.current.stopFlatline();
-    startGame(isMultiplayer, gameMode);
+    startGame(gameMode);
   };
 
   const handleBackToMenu = () => {
     audioSynthRef.current.stopFlatline();
     setGameState('START');
-    stopWSHeartbeat();
-    if (connRef.current) {
-      try {
-        connRef.current.close();
-      } catch (err) {}
-      connRef.current = null;
-    }
-    setIsMultiplayer(false);
   };
 
   const calculatedAcc = accuracy.total > 0 ? Math.round((accuracy.perfect / accuracy.total) * 100) : 0;
@@ -1002,14 +705,6 @@ export default function App() {
         {gameState === 'START' && (
           <div id="start-screen" className="flex flex-col gap-5 py-3 animate-fade-in text-center">
             
-            {/* Direct Link Invite Auto-connection Feedback */}
-            {isDirectJoined && isJoiningLobby && (
-              <div id="direct-invite-alert" className="backdrop-blur-md bg-amber-500/10 border border-amber-500/30 text-amber-400 rounded-2xl p-3 text-center text-xs animate-pulse flex items-center justify-center gap-2 font-sans mb-1 shadow-[0_0_15px_rgba(245,158,11,0.15)]">
-                <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping inline-block" />
-                <span>تم الكشف عن دعوة انضمام مباشرة للغرفة <strong className="font-mono text-white bg-amber-500/20 px-1.5 py-0.5 rounded border border-amber-500/30">{roomCode}</strong>! جاري تسجيل الدخول كمسعف ثانٍ تلقائياً...</span>
-              </div>
-            )}
-
             {/* Pulsating Logo Banner */}
             <div className="my-2 relative flex flex-col items-center">
               <div className="absolute -inset-1 bg-red-500/20 rounded-full blur-2xl animate-pulse w-28 h-28 -z-10" />
@@ -1040,7 +735,7 @@ export default function App() {
             <div className="flex flex-col gap-2 mt-2">
               <button
                 id="start-game-btn"
-                onClick={() => startGame(false, 'ENDLESS')}
+                onClick={() => startGame('ENDLESS')}
                 className="w-full bg-gradient-to-r from-red-650 to-red-800 hover:from-red-550 hover:to-red-700 text-white font-bold py-3 px-6 rounded-xl flex items-center justify-center gap-2 outline-none border border-white/15 shadow-[0_0_15px_rgba(220,38,38,0.4)] active:scale-[0.98] transition-all cursor-pointer text-sm font-display font-medium"
               >
                 <Play className="w-4 h-4 fill-current text-white" />
@@ -1049,75 +744,12 @@ export default function App() {
 
               <button
                 id="start-timed-btn"
-                onClick={() => startGame(false, 'TIMED')}
+                onClick={() => startGame('TIMED')}
                 className="w-full bg-gradient-to-r from-amber-550 to-amber-700 hover:from-amber-450 hover:to-amber-600 text-slate-950 font-bold py-3 px-6 rounded-xl flex items-center justify-center gap-2 outline-none border border-white/15 shadow-[0_0_15px_rgba(251,191,36,0.3)] active:scale-[0.98] transition-all cursor-pointer text-sm font-display font-medium"
               >
                 <Zap className="w-4 h-4 fill-current text-slate-950" />
                 تحدي الـ 60 ثانية (إنعاش سريع)
               </button>
-
-              {/* Multiplayer Room Joining Section */}
-              <div className="flex flex-col gap-2 p-3.5 bg-white/2 pb-4 border border-white/5 rounded-2xl text-right my-1">
-                <label className="text-[10px] uppercase font-bold tracking-widest text-[#fbbf24] flex items-center gap-1.5 justify-end">
-                  <Zap className="w-3.5 h-3.5 text-[#fbbf24] animate-pulse" />
-                  <span>غرفة الطوارئ المشتركة (Co-op Room):</span>
-                </label>
-                
-                <div className="flex gap-2.5 mt-1">
-                  <input
-                    id="room-code-input"
-                    type="text"
-                    value={roomCode}
-                    onChange={(e) => setRoomCode(e.target.value.slice(0, 4).toUpperCase())}
-                    placeholder="رمز الغرفة (مثال: EMER)"
-                    className="bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-[#fbbf24] transition-all font-sans text-center font-bold tracking-widest w-[120px] shrink-0"
-                  />
-                  
-                  <button
-                    id="join-room-btn"
-                    onClick={() => connectToLobby(roomCode)}
-                    disabled={isJoiningLobby}
-                    className="flex-1 bg-gradient-to-r from-amber-500 to-amber-700 hover:from-amber-400 hover:to-amber-600 text-slate-950 font-bold py-2 px-3 rounded-xl flex items-center justify-center gap-1 outline-none border border-white/10 hover:shadow-[0_0_15px_rgba(251,191,36,0.3)] transition-all cursor-pointer text-[11px] disabled:opacity-50"
-                  >
-                    {isJoiningLobby ? 'جاري الاتصال...' : 'انضمام كمسعف ثانٍ'}
-                  </button>
-                </div>
-
-                {roomCode.trim().length > 0 && (
-                  <div className="mt-2 text-center animate-fade-in">
-                    <button
-                      type="button"
-                      onClick={handleCopyInviteLink}
-                      className="inline-flex items-center gap-1.5 text-[10px] text-[#fbbf24] bg-amber-500/10 border border-amber-500/20 rounded-lg px-2.5 py-1.5 w-full justify-center transition-all hover:bg-amber-500/20 active:scale-95 cursor-pointer font-sans"
-                    >
-                      <Share2 className="w-3.5 h-3.5" />
-                      <span>{copiedLink ? '✓ تم نسخ رابط الدعوة المباشرة!' : 'نسخ رابط الدعوة المباشرة للغرفة'}</span>
-                    </button>
-                    <p className="text-[9px] text-white/40 mt-1">
-                      أرسل هذا الرابط لزميلك ليدخل الغرفة مباشرة دون الحاجة لكتابة الرمز!
-                    </p>
-                  </div>
-                )}
-
-                {lobbyPlayers.length > 0 && isJoiningLobby && (
-                  <div className="mt-2.5 p-2 bg-amber-500/10 border border-amber-500/20 rounded-xl text-center">
-                    <p className="text-[10px] text-[#fbbf24] animate-pulse font-medium mb-1.5">
-                      في الانتظار... انضم {lobbyPlayers.length === 1 ? 'مسعف واحد' : 'مسعفان'} للغرفة {roomCode}
-                    </p>
-                    <div className="flex justify-center gap-1.5 text-[9px] text-white/50 font-mono">
-                      {lobbyPlayers.map((name, i) => (
-                        <span key={i} className="bg-white/5 px-2 py-0.5 rounded border border-white/10">
-                          {name} {i === 0 ? '👑' : '🩺'}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {lobbyError && (
-                  <p className="text-[10px] text-red-400 text-center mt-1.5 font-medium">{lobbyError}</p>
-                )}
-              </div>
 
               <button
                 id="how-to-btn"
@@ -1213,7 +845,7 @@ export default function App() {
             </div>
 
             <button
-              onClick={() => startGame(false, 'ENDLESS')}
+              onClick={() => startGame('ENDLESS')}
               className="w-full bg-gradient-to-r from-red-650 to-red-800 text-white font-bold py-3 px-6 rounded-xl flex items-center justify-center gap-2 outline-none border border-white/10 hover:shadow-[0_0_15px_rgba(220,38,38,0.5)] active:scale-[0.98] transition-all cursor-pointer text-sm font-display"
             >
               <HeartHandshake className="w-4 h-4 fill-current" />
@@ -1226,16 +858,6 @@ export default function App() {
         {gameState === 'PLAYING' && (
           <div id="playing-module" className="flex flex-col gap-4 animate-fade-in font-sans">
             
-            {/* Multiplayer WebSocket Connection Badge */}
-            {isMultiplayer && (
-              <div className="flex items-center justify-between px-3.5 py-1.5 bg-amber-500/10 border border-amber-500/20 rounded-xl my-0.5">
-                <span className="text-[10px] text-white/50">رمز الغرفة: <strong className="text-[#fbbf24] font-mono">{roomCode}</strong></span>
-                <span className="text-[11px] text-[#fbbf24] flex items-center gap-1.5 font-bold">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse inline-block" />
-                  المساعد: {partnerName || 'طبيب طوارئ'}
-                </span>
-              </div>
-            )}
 
             {/* Real-time Electrocardiogram (ECG) monitor line */}
             <EKGMonitor 
