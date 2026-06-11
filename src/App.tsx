@@ -136,7 +136,7 @@ export default function App() {
   };
 
   // Real-time peer co-op matchmaking functions using secure WebSockets
-  const connectToLobby = (code: string) => {
+  const connectToLobby = async (code: string) => {
     if (!code.trim()) {
       setLobbyError('الرجاء إدخال رمز الغرفة أولاً');
       return;
@@ -159,21 +159,52 @@ export default function App() {
     let baseHost = window.location.host;
     
     // Fallback to the live dedicated Google Cloud Run WebSocket engine if served statically on Vercel or GitHub Pages
-    if (
+    const isExternalEnvironment = 
       baseHost.includes('vercel.app') || 
       baseHost.includes('github.io') || 
-      (!baseHost.includes('localhost') && !baseHost.includes('run.app'))
-    ) {
+      (!baseHost.includes('localhost') && !baseHost.includes('run.app'));
+
+    if (isExternalEnvironment) {
       baseHost = 'ais-pre-jo2ica7mgzozj6r5jt66bf-287964971170.europe-west2.run.app';
     }
 
+    const httpProtocol = protocol === 'wss:' ? 'https:' : 'http:';
+    const serverHttpUrl = `${httpProtocol}//${baseHost}`;
     const wsUrl = `${protocol}//${baseHost}`;
+
+    // Step 1: Pre-warm / Wake up Cloud Run server (highly critical for serverless cold-starts!)
+    setLobbyError('جاري إيقاظ خادم اللعبة المشترك... قد يستغرق هذا 3 ثوانٍ لأول مرة');
     
+    let serverIsAwake = false;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        const response = await fetch(`${serverHttpUrl}/api/health`, { 
+          mode: 'cors',
+          headers: { 'Accept': 'application/json' }
+        });
+        if (response.ok) {
+          serverIsAwake = true;
+          break;
+        }
+      } catch (err) {
+        console.warn(`Attempt ${attempt} to wake up server failed`, err);
+        // Wait 1 second before retrying
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+    }
+
+    if (!serverIsAwake) {
+      console.warn("Could not confirm server is awake via HTTP, attempting WebSocket connection anyway.");
+    }
+
+    setLobbyError('خادم اللعبة نشط! جاري الاتصال بالغرفة المباشرة...');
+
     try {
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
 
       ws.onopen = () => {
+        setLobbyError('');
         // Submit join credentials
         ws.send(JSON.stringify({
           type: 'JOIN_ROOM',
@@ -198,6 +229,7 @@ export default function App() {
             case 'PLAYER_JOINED':
               setLobbyPlayers(players);
               setIsHost(hostStatus);
+              setLobbyError('');
               break;
 
             case 'START_MATCH':
@@ -230,7 +262,7 @@ export default function App() {
 
       ws.onerror = (err) => {
         console.error("Socket error detail:", err);
-        setLobbyError('فشل الاتصال بالغرفة. يرجى التحقق من جودة الاتصال بالإنترنت.');
+        setLobbyError('فشل الاتصال الآمن بالغرفة. يرجى التأكد من تشغيل الخادم والمحاولة مجدداً.');
         setIsJoiningLobby(false);
       };
 

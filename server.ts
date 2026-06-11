@@ -23,6 +23,18 @@ async function startServer() {
   const PORT = 3000;
   const httpServer = createHttpServer(app);
 
+  // Setup standard CORS to allow external players from Vercel/localhost to connect and query
+  app.use((req, res, next) => {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+    if (req.method === "OPTIONS") {
+      res.sendStatus(200);
+      return;
+    }
+    next();
+  });
+
   // 1. Setup API / Health check routes
   app.get("/api/health", (req, res) => {
     res.json({ status: "alive", roomsCount: Object.keys(rooms).length });
