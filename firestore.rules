@@ -16,7 +16,7 @@ service cloud.firestore {
     }
 
     function isValidId(id) {
-      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+      return id is string && id.size() <= 128;
     }
 
     function incoming() {
@@ -27,32 +27,31 @@ service cloud.firestore {
       return resource.data;
     }
 
-    // ================== Colection Match Blocks ==================
+    // ================== Collection Match Blocks ==================
 
     // UserProfile Entity Collection Rules
     match /users/{userId} {
       allow get: if isSignedIn() && isValidId(userId);
       allow list: if isSignedIn(); // Allow searching registered players
-      allow create: if isSignedIn() && isOwner(userId) && isValidId(userId) && isValidUserProfile(incoming());
-      allow update: if isSignedIn() && isOwner(userId) && isValidId(userId) && isValidUserProfile(incoming()) && (
+      allow create: if isSignedIn() && isOwner(userId) && isValidId(userId) && isValidUserProfile(incoming()) && incoming().updatedAt == request.time;
+      allow update: if isSignedIn() && isOwner(userId) && isValidId(userId) && isValidUserProfile(incoming()) && incoming().updatedAt == request.time && (
         incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt', 'displayName', 'photoURL'])
       );
     }
 
     function isValidUserProfile(data) {
       return data.uid == request.auth.uid
-        && data.email is string && data.email.size() <= 150
+        && (data.email == null || (data.email is string && data.email.size() <= 150))
         && data.displayName is string && data.displayName.size() <= 80
-        && data.status in ['online', 'offline', 'ingame']
-        && data.updatedAt == request.time;
+        && data.status in ['online', 'offline', 'ingame'];
     }
 
     // Friendships Entity Collection Rules
     match /friendships/{friendshipId} {
       allow get: if isSignedIn() && isValidId(friendshipId) && (existing().user1 == request.auth.uid || existing().user2 == request.auth.uid);
       allow list: if isSignedIn() && (resource.data.user1 == request.auth.uid || resource.data.user2 == request.auth.uid);
-      allow create: if isSignedIn() && isValidId(friendshipId) && (incoming().user1 == request.auth.uid || incoming().user2 == request.auth.uid) && isValidFriend(incoming());
-      allow update: if isSignedIn() && isValidId(friendshipId) && (existing().user1 == request.auth.uid || existing().user2 == request.auth.uid) && isValidFriend(incoming()) && (
+      allow create: if isSignedIn() && isValidId(friendshipId) && (incoming().user1 == request.auth.uid || incoming().user2 == request.auth.uid) && isValidFriend(incoming()) && incoming().updatedAt == request.time;
+      allow update: if isSignedIn() && isValidId(friendshipId) && (existing().user1 == request.auth.uid || existing().user2 == request.auth.uid) && isValidFriend(incoming()) && incoming().updatedAt == request.time && (
         incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])
       );
       allow delete: if isSignedIn() && isValidId(friendshipId) && (existing().user1 == request.auth.uid || existing().user2 == request.auth.uid);
@@ -62,18 +61,17 @@ service cloud.firestore {
       return (data.user1 == request.auth.uid || data.user2 == request.auth.uid)
         && data.user1Name is string && data.user1Name.size() <= 80
         && data.user2Name is string && data.user2Name.size() <= 80
-        && data.user1Email is string && data.user1Email.size() <= 150
-        && data.user2Email is string && data.user2Email.size() <= 150
-        && data.status in ['pending', 'accepted']
-        && data.updatedAt == request.time;
+        && (data.user1Email == null || (data.user1Email is string && data.user1Email.size() <= 150))
+        && (data.user2Email == null || (data.user2Email is string && data.user2Email.size() <= 150))
+        && data.status in ['pending', 'accepted'];
     }
 
     // Live Invitations Collection Rules
     match /invitations/{invitationId} {
       allow get: if isSignedIn() && isValidId(invitationId) && (existing().senderId == request.auth.uid || existing().receiverId == request.auth.uid);
       allow list: if isSignedIn() && (resource.data.senderId == request.auth.uid || resource.data.receiverId == request.auth.uid);
-      allow create: if isSignedIn() && isValidId(invitationId) && incoming().senderId == request.auth.uid && isValidInvitation(incoming());
-      allow update: if isSignedIn() && isValidId(invitationId) && (existing().senderId == request.auth.uid || existing().receiverId == request.auth.uid) && isValidInvitation(incoming()) && (
+      allow create: if isSignedIn() && isValidId(invitationId) && incoming().senderId == request.auth.uid && isValidInvitation(incoming()) && incoming().createdAt == request.time;
+      allow update: if isSignedIn() && isValidId(invitationId) && (existing().senderId == request.auth.uid || existing().receiverId == request.auth.uid) && isValidInvitation(incoming()) && incoming().createdAt == existing().createdAt && (
         incoming().diff(existing()).affectedKeys().hasOnly(['status'])
       );
       allow delete: if isSignedIn() && isValidId(invitationId) && (existing().senderId == request.auth.uid || existing().receiverId == request.auth.uid);
@@ -83,8 +81,7 @@ service cloud.firestore {
       return (data.senderId == request.auth.uid || data.receiverId == request.auth.uid)
         && data.senderName is string && data.senderName.size() <= 80
         && data.roomCode is string && data.roomCode.size() <= 20
-        && data.status in ['pending', 'accepted', 'declined']
-        && data.createdAt == request.time;
+        && data.status in ['pending', 'accepted', 'declined'];
     }
   }
 }

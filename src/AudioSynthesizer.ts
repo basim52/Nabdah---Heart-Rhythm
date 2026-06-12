@@ -124,6 +124,8 @@ export class AudioSynthesizer {
     }
   }
 
+  private isMutatedMode: boolean = false;
+
   /**
    * Synthesizes a normal tap hit sound (clean zap).
    */
@@ -137,17 +139,33 @@ export class AudioSynthesizer {
       const osc = this.ctx.createOscillator();
       const gain = this.ctx.createGain();
 
-      osc.type = 'triangle';
-      
-      // Pitch sweeps down quickly
-      osc.frequency.setValueAtTime(440, now);
-      osc.frequency.exponentialRampToValueAtTime(80, now + 0.08);
+      if (this.isMutatedMode) {
+        // Futuristic cyber snap with subtle frequency modulation
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(880, now);
+        osc.frequency.exponentialRampToValueAtTime(120, now + 0.05);
 
-      gain.gain.setValueAtTime(0.4, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = 'highpass';
+        filter.frequency.setValueAtTime(300, now);
 
-      osc.connect(gain);
-      gain.connect(this.masterGain);
+        gain.gain.setValueAtTime(0.25, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
+
+        osc.connect(filter);
+        filter.connect(gain);
+        gain.connect(this.masterGain);
+      } else {
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(440, now);
+        osc.frequency.exponentialRampToValueAtTime(80, now + 0.08);
+
+        gain.gain.setValueAtTime(0.4, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+
+        osc.connect(gain);
+        gain.connect(this.masterGain);
+      }
 
       osc.start(now);
       osc.stop(now + 0.1);
@@ -166,31 +184,53 @@ export class AudioSynthesizer {
     const now = this.ctx.currentTime;
 
     try {
-      // Create harmony using 2 oscillators
-      const frequencies = [880, 1100, 1320]; // Major triad overtones (A5, C#6, E6)
-      
-      frequencies.forEach((freq, index) => {
-        const osc = this.ctx!.createOscillator();
-        const gain = this.ctx!.createGain();
+      if (this.isMutatedMode) {
+        // Cyber pentatonic ascending arpeggio for perfect hits
+        const frequencies = [587.33, 659.25, 739.99, 880.00, 1174.66]; // D Major Penatonic
+        frequencies.forEach((freq, index) => {
+          const osc = this.ctx!.createOscillator();
+          const gain = this.ctx!.createGain();
 
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(freq, now);
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(freq, now + (index * 0.035));
+          
+          gain.gain.setValueAtTime(0, now + (index * 0.035));
+          gain.gain.linearRampToValueAtTime(0.12, now + (index * 0.035) + 0.015);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + (index * 0.035) + 0.15);
+
+          osc.connect(gain);
+          gain.connect(this.masterGain!);
+
+          osc.start(now + (index * 0.035));
+          osc.stop(now + (index * 0.035) + 0.16);
+        });
+      } else {
+        // Create harmony using 2 oscillators
+        const frequencies = [880, 1100, 1320]; // Major triad overtones (A5, C#6, E6)
         
-        // Add subtle pitch vib/slide upwards for extra magic
-        osc.frequency.linearRampToValueAtTime(freq + 10, now + 0.15);
+        frequencies.forEach((freq, index) => {
+          const osc = this.ctx!.createOscillator();
+          const gain = this.ctx!.createGain();
 
-        // Gain envelope - slightly staggered per voice
-        const delay = index * 0.02;
-        gain.gain.setValueAtTime(0, now);
-        gain.gain.linearRampToValueAtTime(0.25 - (index * 0.05), now + delay + 0.02);
-        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(freq, now);
+          
+          // Add subtle pitch vib/slide upwards for extra magic
+          osc.frequency.linearRampToValueAtTime(freq + 10, now + 0.15);
 
-        osc.connect(gain);
-        gain.connect(this.masterGain!);
+          // Gain envelope - slightly staggered per voice
+          const delay = index * 0.02;
+          gain.gain.setValueAtTime(0, now);
+          gain.gain.linearRampToValueAtTime(0.25 - (index * 0.05), now + delay + 0.02);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
 
-        osc.start(now + delay);
-        osc.stop(now + 0.4);
-      });
+          osc.connect(gain);
+          gain.connect(this.masterGain!);
+
+          osc.start(now + delay);
+          osc.stop(now + 0.4);
+        });
+      }
     } catch (e) {
       console.warn("Perfect sound failed", e);
     }
@@ -327,9 +367,11 @@ export class AudioSynthesizer {
   /**
    * Starts the procedural ambient background music.
    */
-  public startAmbientSoundtrack(initialBpm: number = 72): void {
+  public startAmbientSoundtrack(initialBpm: number = 72, isMutated: boolean = false): void {
     if (!this.ctx || !this.masterGain) return;
     if (this.ctx.state === 'suspended') return;
+
+    this.isMutatedMode = isMutated;
 
     // Safety check - stop any leftover nodes first
     this.stopAmbientSoundtrack();
@@ -342,20 +384,20 @@ export class AudioSynthesizer {
       this.ambientFilter.type = 'lowpass';
       
       // Calculate initial cutoff based on starting BPM
-      const initialCutoff = 180 + Math.max(0, (initialBpm - 72) / 72) * 420;
+      const initialCutoff = isMutated ? 300 : (180 + Math.max(0, (initialBpm - 72) / 72) * 420);
       this.ambientFilter.frequency.setValueAtTime(initialCutoff, now);
-      this.ambientFilter.Q.setValueAtTime(1.5, now);
+      this.ambientFilter.Q.setValueAtTime(isMutated ? 2.5 : 1.5, now);
       this.ambientFilter.connect(this.masterGain);
 
       // 2. Create the pulsing LFO (creates the breathing aesthetic)
       this.ambientLfo = this.ctx.createOscillator();
-      this.ambientLfo.type = 'sine';
-      const initialLfoFreq = (initialBpm / 60) * 1.0; // 1 swell/breath per beat
+      this.ambientLfo.type = isMutated ? 'sawtooth' : 'sine'; // Grittier swell for mutated virus
+      const initialLfoFreq = (initialBpm / 60) * (isMutated ? 1.25 : 1.0);
       this.ambientLfo.frequency.setValueAtTime(initialLfoFreq, now);
 
       this.ambientLfoGain = this.ctx.createGain();
       // LFO amplitude represents breath depth - deeper as BPM rises
-      const initialLfoDepth = 0.04 + Math.max(0, (initialBpm - 72) / 72) * 0.08;
+      const initialLfoDepth = isMutated ? 0.07 : (0.04 + Math.max(0, (initialBpm - 72) / 72) * 0.08);
       this.ambientLfoGain.gain.setValueAtTime(initialLfoDepth, now);
 
       // Connect LFO graph
@@ -363,22 +405,28 @@ export class AudioSynthesizer {
 
       // 3. Create core pad gain and connect LFO to modulate its level
       const padGain = this.ctx.createGain();
-      padGain.gain.setValueAtTime(0.12, now); // Baseline volume
+      padGain.gain.setValueAtTime(isMutated ? 0.10 : 0.12, now); // Baseline volume
       this.ambientLfoGain.connect(padGain.gain); // Modulates volume dynamically!
       padGain.connect(this.ambientFilter);
       this.ambientGains.push(padGain);
 
-      // 4. Spawn active harmonics (Warm minor chord progression)
-      // C2 (65.41), C3 (130.81), Eb3 (155.56), G3 (196.00)
-      const pitches = [65.41, 130.81, 155.56, 196.00];
+      // 4. Spawn active harmonics
+      // Standard: Warm minor chord (C2, C3, Eb3, G3)
+      // Mutated: Cyborg Dissonant scale (D2, F#3, G#3, C#4)
+      const pitches = isMutated 
+        ? [73.42, 185.00, 207.65, 277.18]
+        : [65.41, 130.81, 155.56, 196.00];
+
       pitches.forEach((freq, idx) => {
         if (!this.ctx) return;
         const osc = this.ctx.createOscillator();
-        // Alternating triangle and sine waveforms for smooth texture
-        osc.type = idx % 2 === 0 ? 'sine' : 'triangle';
+        // Alternating waveforms: standard square/sine for mutated to give cool mechanical/acid sound
+        osc.type = isMutated 
+          ? (idx % 2 === 0 ? 'sine' : 'sawtooth')
+          : (idx % 2 === 0 ? 'sine' : 'triangle');
         
         // Slightly detune to create a lush cinematic widening chorus
-        const detuneValue = idx === 0 ? 0 : idx % 2 === 0 ? 0.4 : -0.4;
+        const detuneValue = idx === 0 ? 0 : idx % 2 === 0 ? 0.8 : -0.8;
         osc.frequency.setValueAtTime(freq + detuneValue, now);
         
         osc.connect(padGain);
@@ -389,11 +437,11 @@ export class AudioSynthesizer {
       // 5. Create High Tension Generator (Detuned alarm resonance)
       // Set to high Bb4/Eb5, completely quiet initially at low BPM
       this.tensionOscillator = this.ctx.createOscillator();
-      this.tensionOscillator.type = 'triangle';
-      this.tensionOscillator.frequency.setValueAtTime(466.16, now); // Bb4 - extremely tense
+      this.tensionOscillator.type = isMutated ? 'sawtooth' : 'triangle';
+      this.tensionOscillator.frequency.setValueAtTime(isMutated ? 587.33 : 466.16, now); // Bb4 standard, D5 mutated
 
       this.tensionGain = this.ctx.createGain();
-      const initialTensionVol = Math.max(0, (initialBpm - 72) / 72) * 0.20;
+      const initialTensionVol = isMutated ? 0.08 : (Math.max(0, (initialBpm - 72) / 72) * 0.20);
       this.tensionGain.gain.setValueAtTime(initialTensionVol, now);
 
       this.tensionOscillator.connect(this.tensionGain);

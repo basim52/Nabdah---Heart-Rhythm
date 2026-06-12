@@ -19,6 +19,8 @@ interface HeartGameCanvasProps {
   onTapNode: (id: string, isPerfect: boolean, tapX: number, tapY: number) => void;
   onMissNode: (id: string) => void;
   isPaused: boolean;
+  currentLevel?: number;
+  gameMode?: 'ENDLESS' | 'TIMED' | 'LEVELS';
 }
 
 export const HeartGameCanvas: React.FC<HeartGameCanvasProps> = ({
@@ -34,6 +36,8 @@ export const HeartGameCanvas: React.FC<HeartGameCanvasProps> = ({
   onTapNode,
   onMissNode,
   isPaused,
+  currentLevel = 1,
+  gameMode = 'ENDLESS',
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   
@@ -174,8 +178,10 @@ export const HeartGameCanvas: React.FC<HeartGameCanvasProps> = ({
       const cx = w / 2;
       const cy = h / 2;
 
+      const isMutatedEnv = gameMode === 'LEVELS' && currentLevel && currentLevel >= 31;
+
       // Clear dark cyber grid background matching Frosted Glass '#0a0505'
-      ctx.fillStyle = '#0a0505'; 
+      ctx.fillStyle = isMutatedEnv ? '#02030a' : '#0a0505'; 
       ctx.fillRect(0, 0, w, h);
 
       // Light ambient Glow Pulse centered at the heart that intensifies with BPM and beats
@@ -187,17 +193,46 @@ export const HeartGameCanvas: React.FC<HeartGameCanvasProps> = ({
         const alpha = (0.02 + bpmFactor * 0.15) * (beatScale - 0.9);
         
         const glowGrad = ctx.createRadialGradient(cx, cy, 5, cx, cy, w * 0.65);
-        // Fade from a dark digital blood-red/neon-rose glow to absolute black
-        glowGrad.addColorStop(0, `rgba(${Math.round(20 + bpmFactor * 100)}, 10, 20, ${alpha})`);
-        glowGrad.addColorStop(1, 'rgba(10, 5, 5, 0)');
+        if (isMutatedEnv) {
+          // Cyber glow: neon violet and emerald
+          glowGrad.addColorStop(0, `rgba(${Math.round(80 + bpmFactor * 90)}, 20, ${Math.round(200 + bpmFactor * 55)}, ${alpha * 1.4})`);
+          glowGrad.addColorStop(1, 'rgba(2, 3, 10, 0)');
+        } else {
+          // Fade from a dark digital blood-red/neon-rose glow to absolute black
+          glowGrad.addColorStop(0, `rgba(${Math.round(20 + bpmFactor * 100)}, 10, 20, ${alpha})`);
+          glowGrad.addColorStop(1, 'rgba(10, 5, 5, 0)');
+        }
         
         ctx.fillStyle = glowGrad;
         ctx.fillRect(0, 0, w, h);
         ctx.restore();
       }
 
+      // Floating Cyber nano metrics in background
+      if (isMutatedEnv && heartHealth > 0) {
+        ctx.save();
+        ctx.fillStyle = 'rgba(6, 182, 212, 0.12)'; // Neon Cyan translucent
+        ctx.font = '7px monospace, sans-serif';
+        ctx.textAlign = 'left';
+        
+        const headerScanValue = Math.round(80 + Math.sin(Date.now() / 1000) * 15);
+        ctx.fillText(`NANO_SYS_STATUS: ACTIVE`, 15, 20);
+        ctx.fillText(`MUTATION_STABILIZER: v5.1`, 15, 30);
+        ctx.fillText(`BIO_PROBE_READOUT: ${headerScanValue}%`, 15, 40);
+        
+        ctx.textAlign = 'right';
+        ctx.fillText(`PROT_MATRIX: 512-BIT`, w - 15, 20);
+        ctx.fillText(`THERAPY_CORE: STABLE`, w - 15, 30);
+        ctx.fillText(`CYBER_INFECT_LOCKED: YES`, w - 15, 40);
+        ctx.restore();
+      }
+
       // HELPER: Compute dynamic venous color smoothly transitioning based on BPM
       const getVeinColor = (bpm: number, alphaMultiplier: number) => {
+        if (isMutatedEnv) {
+          // Mutated environment cybernetic neon cyan/purple
+          return `rgba(6, 182, 212, ${alphaMultiplier})`;
+        }
         if (bpm <= 72) {
           // Healthy deep blood-red/magenta
           return `rgba(185, 28, 28, ${alphaMultiplier})`;
@@ -372,6 +407,27 @@ export const HeartGameCanvas: React.FC<HeartGameCanvasProps> = ({
 
       // RENDER THE BEATING HEART IN THE CENTER
       const displaySize = heartBaseRadius * beatScale;
+      
+      // Add custom visual nano-mesh ring around heart if mutated
+      if (isMutatedEnv && heartHealth > 0) {
+        ctx.save();
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = '#06b6d4';
+        ctx.strokeStyle = 'rgba(6, 182, 212, 0.45)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(cx, cy, displaySize * 1.5, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Second dotted scanner ring
+        ctx.setLineDash([3, 5]);
+        ctx.strokeStyle = 'rgba(139, 92, 246, 0.6)'; // purple
+        ctx.beginPath();
+        ctx.arc(cx, cy, displaySize * 1.8 + Math.sin(Date.now() / 200) * 4, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      }
+
       drawHeart(ctx, cx, cy, displaySize, heartHealth);
 
       // RENDER THREAT NODES
@@ -598,6 +654,248 @@ export const HeartGameCanvas: React.FC<HeartGameCanvasProps> = ({
             ctx.fill();
             ctx.fillStyle = '#ef4444'; // restore for remaining eyes
           });
+        } else if (node.type === NodeType.MUTATED_RETROVIRUS) {
+          // MUTATED_RETROVIRUS: Pink/orange triangle with rotating RNA strand, and slithery golden tentacles
+          ctx.save();
+          ctx.translate(nx, ny);
+          const drawAngle = Date.now() / 300;
+          ctx.rotate(drawAngle);
+          
+          // Draw triangle
+          ctx.fillStyle = '#ec4899'; // Hot pink
+          ctx.strokeStyle = '#f43f5e';
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.moveTo(0, -node.radius * 1.2);
+          ctx.lineTo(node.radius, node.radius * 0.8);
+          ctx.lineTo(-node.radius, node.radius * 0.8);
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+
+          // Rotating RNA/genetic thread inside
+          ctx.strokeStyle = '#f59e0b'; // Gold
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          for (let x = -node.radius * 0.6; x <= node.radius * 0.6; x += 2) {
+            const y = Math.sin(x * 0.4 + Date.now() / 100) * (node.radius * 0.3);
+            if (x === -node.radius * 0.6) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+          }
+          ctx.stroke();
+          ctx.restore();
+
+          // 3 long slithery golden tentacles waving behind (opposite to approach path)
+          ctx.strokeStyle = '#f59e0b';
+          ctx.lineWidth = 1.5;
+          const backAngle = Math.atan2(ny - cy, nx - cx);
+          for (let i = -1; i <= 1; i++) {
+            const tentAngle = backAngle + (i * 0.25) + Math.sin(Date.now() / 120 + i) * 0.15;
+            const tx = nx + Math.cos(tentAngle) * (node.radius * 1.6);
+            const ty = ny + Math.sin(tentAngle) * (node.radius * 1.6);
+            ctx.beginPath();
+            ctx.moveTo(nx, ny);
+            ctx.quadraticCurveTo(
+              nx + Math.cos(backAngle) * (node.radius * 1.0),
+              ny + Math.sin(backAngle) * (node.radius * 1.0),
+              tx,
+              ty
+            );
+            ctx.stroke();
+          }
+        } else if (node.type === NodeType.CYBER_NANO_PHAGE) {
+          // CYBER_NANO_PHAGE: Golden hexagonal landing capsule with spider-like needle legs
+          ctx.save();
+          ctx.translate(nx, ny);
+          ctx.rotate(Math.atan2(ny - cy, nx - cx) - Math.PI / 2); // points toward the heart
+
+          // Hexagonal Cap
+          ctx.fillStyle = '#eab308'; // Glowing yellow
+          ctx.strokeStyle = '#facc15';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          for (let i = 0; i < 6; i++) {
+            const angle = (i / 6) * Math.PI * 2;
+            const hx = Math.cos(angle) * node.radius;
+            const hy = Math.sin(angle) * (node.radius * 0.82);
+            if (i === 0) ctx.moveTo(hx, hy);
+            else ctx.lineTo(hx, hy);
+          }
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+
+          // Spider legs (6 legs planting back)
+          ctx.strokeStyle = '#facc15';
+          ctx.lineWidth = 1.5;
+          const legs = [-1.4, -0.8, -0.2, 0.2, 0.8, 1.4];
+          legs.forEach((legOffset, lIdx) => {
+            const legAngle = Math.PI + legOffset + Math.sin(Date.now() / 80 + lIdx) * 0.2;
+            const jX = Math.cos(legAngle) * (node.radius * 0.9);
+            const jY = Math.sin(legAngle) * (node.radius * 0.9);
+            const tX = Math.cos(legAngle) * (node.radius * 1.8 + Math.sin(Date.now() / 150) * 3);
+            const tY = Math.sin(legAngle) * (node.radius * 1.8);
+            ctx.beginPath();
+            ctx.moveTo(0, 0);
+            ctx.lineTo(jX, jY);
+            ctx.lineTo(tX, tY);
+            ctx.stroke();
+          });
+
+          // Glowing internal laser eye
+          ctx.fillStyle = '#ef4444';
+          ctx.beginPath();
+          ctx.arc(0, -node.radius * 0.2, 2.5, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        } else if (node.type === NodeType.PLASMA_SPORE) {
+          // PLASMA_SPORE: Hot orange sphere with a shifting outer corona and bio-luminescent hairs
+          ctx.save();
+          // Corona aura
+          const coronaGrad = ctx.createRadialGradient(nx, ny, 2, nx, ny, node.radius * 1.7);
+          coronaGrad.addColorStop(0, '#f97316'); // Orange
+          coronaGrad.addColorStop(0.5, 'rgba(239, 68, 68, 0.4)'); // Red translucent
+          coronaGrad.addColorStop(1, 'rgba(244, 63, 94, 0)');
+          ctx.fillStyle = coronaGrad;
+          ctx.beginPath();
+          ctx.arc(nx, ny, node.radius * 1.7, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Central core
+          ctx.fillStyle = '#ffffff';
+          ctx.beginPath();
+          ctx.arc(nx, ny, node.radius * 0.6, 0, Math.PI * 2);
+          ctx.fill();
+
+          // 8 outer waving bio-luminescent fiber tips
+          ctx.strokeStyle = 'rgba(249, 115, 22, 0.6)';
+          ctx.lineWidth = 1.5;
+          for (let i = 0; i < 8; i++) {
+            const fiberAngle = (i / 8) * Math.PI * 2 + (Date.now() / 180);
+            const fDist = node.radius * 1.1 + Math.sin(Date.now() / 110 + i) * 4;
+            const fx = nx + Math.cos(fiberAngle) * fDist;
+            const fy = ny + Math.sin(fiberAngle) * fDist;
+
+            ctx.beginPath();
+            ctx.moveTo(nx, ny);
+            ctx.lineTo(fx, fy);
+            ctx.stroke();
+
+            // Tip dot
+            ctx.fillStyle = '#fb7185';
+            ctx.beginPath();
+            ctx.arc(fx, fy, 2, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          ctx.restore();
+        } else if (node.type === NodeType.CROWN_CORONAVIRUS) {
+          // CROWN_CORONAVIRUS: Heavy purple sphere with long crown spikes that swell/contract
+          ctx.save();
+          const scaleOsc = 1 + Math.sin(Date.now() / 150) * 0.12;
+          const drawRadius = node.radius * scaleOsc;
+          
+          // Outer spikes with crown spheres at tips
+          ctx.strokeStyle = '#a855f7'; // Purple
+          ctx.lineWidth = 2;
+          const crownSpikes = 12;
+          for (let i = 0; i < crownSpikes; i++) {
+            const spikeAngle = (i / crownSpikes) * Math.PI * 2 + (Date.now() / 500);
+            const sl = drawRadius * 1.4;
+            const sx = nx + Math.cos(spikeAngle) * sl;
+            const sy = ny + Math.sin(spikeAngle) * sl;
+
+            ctx.beginPath();
+            ctx.moveTo(nx, ny);
+            ctx.lineTo(sx, sy);
+            ctx.stroke();
+
+            // Crown tip
+            ctx.fillStyle = '#ec4899'; // Magenta
+            ctx.beginPath();
+            ctx.arc(sx, sy, 3, 0, Math.PI * 2);
+            ctx.fill();
+          }
+
+          // Main body core
+          ctx.fillStyle = '#7c3aed'; // Violet
+          ctx.strokeStyle = '#c084fc';
+          ctx.lineWidth = 2.5;
+          ctx.beginPath();
+          ctx.arc(nx, ny, drawRadius * 0.95, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+
+          // Inner virus core pattern
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
+          ctx.beginPath();
+          ctx.arc(nx, ny, drawRadius * 0.4, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        } else if (node.type === NodeType.NANO_MEGA_BOSS) {
+          // NANO_MEGA_BOSS: Ultimate heavy level 60 metal machine core, 3 outer spinning red gear blades, double shield
+          ctx.save();
+          // Concentric outer laser shields
+          ctx.strokeStyle = 'rgba(6, 182, 212, 0.4)'; // Cyan
+          ctx.lineWidth = 1.5;
+          ctx.setLineDash([4, 4]);
+          ctx.beginPath();
+          ctx.arc(nx, ny, node.radius * 1.6 + Math.sin(Date.now() / 80) * 3, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.setLineDash([]);
+
+          ctx.strokeStyle = 'rgba(239, 68, 68, 0.3)'; // Red
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(nx, ny, node.radius * 1.35, 0, Math.PI * 2);
+          ctx.stroke();
+
+          // Outer spinning red gear blades
+          ctx.strokeStyle = '#ef4444';
+          ctx.lineWidth = 3;
+          const bladeCount = 3;
+          const bladeAngleOffset = Date.now() / 250;
+          for (let i = 0; i < bladeCount; i++) {
+            const angle = (i / bladeCount) * Math.PI * 2 + bladeAngleOffset;
+            const bX = nx + Math.cos(angle) * (node.radius * 1.45);
+            const bY = ny + Math.sin(angle) * (node.radius * 1.45);
+            ctx.beginPath();
+            ctx.moveTo(nx, ny);
+            ctx.lineTo(bX, bY);
+            ctx.stroke();
+
+            // Large sharp blade tip
+            ctx.fillStyle = '#f87171';
+            ctx.beginPath();
+            ctx.arc(bX, bY, 5, 0, Math.PI * 2);
+            ctx.fill();
+          }
+
+          // Central armored metal block
+          ctx.fillStyle = '#374151'; // Charcoal armor
+          ctx.strokeStyle = '#22d3ee'; // Cyber cyan trim
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.arc(nx, ny, node.radius, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+
+          // Heavy glowing red reactor core in center
+          ctx.fillStyle = '#ef4444';
+          ctx.beginPath();
+          ctx.arc(nx, ny, node.radius * 0.45, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Floating neon mechanical scan cross
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.moveTo(nx - node.radius * 0.3, ny);
+          ctx.lineTo(nx + node.radius * 0.3, ny);
+          ctx.moveTo(nx, ny - node.radius * 0.3);
+          ctx.lineTo(nx, ny + node.radius * 0.3);
+          ctx.stroke();
+
+          ctx.restore();
         } else {
           // Standard electric disruption ring
           ctx.strokeStyle = '#ffffff88';

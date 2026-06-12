@@ -38,7 +38,7 @@ import { HeartGameCanvas } from './components/HeartGameCanvas';
 import { BpmHistoryChart } from './components/BpmHistoryChart';
 
 // Firebase Integrations
-import { auth, db } from './firebase';
+import { auth, db, handleFirestoreError, OperationType } from './firebase';
 import { 
   onAuthStateChanged, 
   signInWithPopup, 
@@ -138,18 +138,24 @@ export default function App() {
   const [maxUnlockedLevel, setMaxUnlockedLevel] = useState<number>(1);
   const [levelCompleted, setLevelCompleted] = useState<boolean>(false);
   const [showLevelsView, setShowLevelsView] = useState<boolean>(false);
+  const [activeLevelTab, setActiveLevelTab] = useState<'CLASSIC' | 'MUTATED'>('CLASSIC');
   const [selectedLevelInfo, setSelectedLevelInfo] = useState<number | null>(null);
 
-  // Helper to calculate stage configurations (1 to 30) - Scales difficulty beautifully
+  // Helper to calculate stage configurations (1 to 60) - Scales difficulty beautifully
   const getStageConfig = (lvl: number) => {
-    // Level 30 needs an epic target score!
+    // Advanced Cyber Mutated stages (31 to 60)
     let targetScore = lvl * 100 + 50; 
     if (lvl === 30) {
       targetScore = 3500; // Epic boss score goal
+    } else if (lvl === 60) {
+      targetScore = 6000; // Ultimate giant megaboss boss score goal
+    } else if (lvl >= 31) {
+      // Scale target scores nicely for the advanced arc
+      targetScore = 3000 + (lvl - 30) * 120;
     }
     
-    // Shorter spawn intervals as level increases (clamped above 440ms for extreme stages on level 28-30)
-    const baseSpawnInterval = Math.max(lvl === 30 ? 460 : 440, 2400 - (lvl * 64)); 
+    // Shorter spawn intervals as level increases (clamped sensibly)
+    const baseSpawnInterval = Math.max(lvl >= 50 ? 320 : lvl >= 31 ? 380 : lvl === 30 ? 460 : 440, 2400 - (lvl * 64)); 
     
     // Higher speed base factor as difficulty expands
     const baseSpeed = 0.8 + (lvl * 0.057); 
@@ -157,6 +163,38 @@ export default function App() {
   };
 
   const getStageDescription = (lvl: number) => {
+    if (lvl === 60) {
+      return {
+        title: "المواجهة المطلقة: المدمر الميكانيكي الأخير (المستوى النهائي 60)!",
+        threats: "زعيم النانو الميكانيكي العملاق NANO_MEGA_BOSS (يتطلب 15 ضربة متتالية!) + سيل من الفيروسات التاجية وأبواغ البلازما!",
+        speed: "عاصفة تجتاح الكيان ⚡⚡⚡",
+        desc: "لقد وصلت إلى ذروة المغامرة المجهرية! لقد طوّر الفيروس نفسه إلى آلة ميكانيكية مدمرة لغزو خلايا عضلات القلب تماماً. صماماتك الإيقاعية وتركيزك المطلق هما الأمل الأخير لإذابة صفائح النانو المغناطيسية لهذا الكيان المعدني واستئصال الطفرة نهائياً!"
+      };
+    }
+    if (lvl >= 51) {
+      return {
+        title: `التحول التاجي المتكامل - مستوى ${lvl}`,
+        threats: "الفيروس التاجي المتحور (Crown Coronavirus - 3 نقرات) + أبواغ البلازما وهجمات جراثيم الاختراق المتزامنة!",
+        speed: "برق حيوي خاطف 🚀⚡",
+        desc: "مستعمرات الفيروس التاجي ذات النتوءات الشوكية الحادة تجتاح النبض! هذه الفيروسات قادرة على التمدد والتقلص العشوائي بشكل يخدع الحواس ويفقدك الإيقاع دون ثبات كامل."
+      };
+    }
+    if (lvl >= 41) {
+      return {
+        title: `الشرارة النانوية الرقمية - مستوى ${lvl}`,
+        threats: "أجسام نانو فيج السيبرانية الراقصة (Cyber Phage) + فيروسات غراء سريعة ومقويات نبض نادرة!",
+        speed: "تسونامي سيبراني 🔊",
+        desc: "تتراكم الكبسولات النانوية ذات الستة أرجل معدنية حول صماماتك لتبث تشويشات برمجية دقيقة! تصرف بسرعة بالغة واقض عليها إثر حركتها المتموجة السريعة."
+      };
+    }
+    if (lvl >= 31) {
+      return {
+        title: `حقبة المتغيرات البلازمية - مستوى ${lvl}`,
+        threats: "أبواغ البلازما المشحونة (Plasma Spore) + الفيروسات الرجعية الملتوية ذات الخيوط الأنيقة!",
+        speed: "نبض مجهري فتاك 🌋",
+        desc: "مرحباً بك في المنطقة المتقدمة المتميزة بالمؤثرات الصوتية والمحيطية المتغيرة! حقل القوة الحبوح حوّل الأنقاض المجهرية إلى هالات طاقة مضيئة مدمّرة لسلامة الأوردة والشرايين."
+      };
+    }
     if (lvl === 30) {
       return {
         title: "المعركة الكبرى: بكتيريا العملاق الأبيدوس!",
@@ -265,7 +303,7 @@ export default function App() {
           updatedAt: serverTimestamp()
         });
       } catch (e) {
-        console.error('Status update failed', e);
+        handleFirestoreError(e, OperationType.UPDATE, `users/${auth.currentUser.uid}`);
       }
     }
   };
@@ -277,14 +315,18 @@ export default function App() {
       if (user) {
         // Register/update user profile
         const userRef = doc(db, 'users', user.uid);
-        await setDoc(userRef, {
-          uid: user.uid,
-          email: user.email,
-          displayName: user.displayName || user.email?.split('@')[0] || 'طبيب نبّاض',
-          photoURL: user.photoURL || 'https://api.dicebear.com/7.x/pixel-art/svg?seed=' + user.uid,
-          status: 'online',
-          updatedAt: serverTimestamp()
-        }, { merge: true });
+        try {
+          await setDoc(userRef, {
+            uid: user.uid,
+            email: user.email || `${user.uid}@nabdah.app`,
+            displayName: user.displayName || user.email?.split('@')[0] || 'طبيب نبّاض',
+            photoURL: user.photoURL || 'https://api.dicebear.com/7.x/pixel-art/svg?seed=' + user.uid,
+            status: 'online',
+            updatedAt: serverTimestamp()
+          }, { merge: true });
+        } catch (error) {
+          handleFirestoreError(error, OperationType.CREATE, `users/${user.uid}`);
+        }
 
         setPlayerName(user.displayName || user.email?.split('@')[0] || 'نبّاض');
 
@@ -294,7 +336,7 @@ export default function App() {
           const list1 = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
           setFriendships1(list1);
         }, (error) => {
-          console.warn('Friend q1 subscription error:', error);
+          handleFirestoreError(error, OperationType.LIST, 'friendships');
         });
 
         // Listen to friendships where current user is user2
@@ -303,7 +345,7 @@ export default function App() {
           const list2 = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
           setFriendships2(list2);
         }, (error) => {
-          console.warn('Friend q2 subscription error:', error);
+          handleFirestoreError(error, OperationType.LIST, 'friendships');
         });
 
         return () => {
@@ -386,6 +428,8 @@ export default function App() {
             [friendUid]: data.status || 'offline'
           }));
         }
+      }, (error) => {
+        handleFirestoreError(error, OperationType.GET, `users/${friendUid}`);
       });
     });
 
@@ -413,6 +457,8 @@ export default function App() {
       } else {
         setIncomingInvite(null);
       }
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'invitations');
     });
 
     return () => unsub();
@@ -437,6 +483,8 @@ export default function App() {
           setOutInviteStatus(null);
         }
       }
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, `invitations/${activeInviteDocId}`);
     });
 
     return () => unsub();
@@ -450,20 +498,21 @@ export default function App() {
   // Start/Stop dynamic background Ambient Soundtrack based on game state
   useEffect(() => {
     if (gameState === 'PLAYING') {
-      audioSynthRef.current.startAmbientSoundtrack(currentBPM);
+      const isMutated = gameMode === 'LEVELS' && currentLevel >= 31;
+      audioSynthRef.current.startAmbientSoundtrack(currentBPM, isMutated);
     } else {
       audioSynthRef.current.stopAmbientSoundtrack();
     }
     return () => {
       audioSynthRef.current.stopAmbientSoundtrack();
     };
-  }, [gameState]);
+  }, [gameState, gameMode, currentLevel]);
 
   // Dynamically update Ambient Soundtrack parameters on BPM, health and stage changes
   useEffect(() => {
     if (gameState === 'PLAYING') {
       const isDanger = heartHealth < 35 || (isSplitScreen && heartHealth2 < 35);
-      const isBoss = gameMode === 'LEVELS' && currentLevel === 30;
+      const isBoss = gameMode === 'LEVELS' && (currentLevel === 30 || currentLevel === 60);
       audioSynthRef.current.updateAmbientBPM(currentBPM, isDanger, isBoss);
     }
   }, [currentBPM, gameState, heartHealth, heartHealth2, isSplitScreen, gameMode, currentLevel]);
@@ -545,7 +594,7 @@ export default function App() {
         
         // Save level status
         const nextLvl = currentLevel + 1;
-        if (nextLvl <= 30 && nextLvl > maxUnlockedLevel) {
+        if (nextLvl <= 60 && nextLvl > maxUnlockedLevel) {
           setMaxUnlockedLevel(nextLvl);
           localStorage.setItem('nabdah_max_unlocked_level_v1', String(nextLvl));
         }
@@ -942,7 +991,98 @@ export default function App() {
       
       if (gameMode === 'LEVELS') {
         const stage = currentLevel;
-        if (stage === 30) {
+        if (stage === 60) {
+          // Ultimate Final Megaboss stage (Level 60)
+          if (roll < 0.08) {
+            type = NodeType.NANO_MEGA_BOSS;
+            color = '#374151'; // Charcoal armor
+            initialHealth = 15; // Mega health!
+            speed = 0.32;
+            radius = 32;
+          } else if (roll >= 0.08 && roll < 0.22) {
+            type = NodeType.CROWN_CORONAVIRUS;
+            color = '#a855f7';
+            initialHealth = 3;
+            speed = 1.2;
+            radius = 15;
+          } else if (roll >= 0.22 && roll < 0.40) {
+            type = NodeType.CYBER_NANO_PHAGE;
+            color = '#eab308';
+            initialHealth = 2;
+            speed = 1.7;
+            radius = 11;
+          } else if (roll >= 0.40 && roll < 0.60) {
+            type = NodeType.MUTATED_RETROVIRUS;
+            color = '#ec4899';
+            initialHealth = 1;
+            speed = 2.1;
+            radius = 9;
+          } else if (roll >= 0.60 && roll < 0.80) {
+            type = NodeType.PLASMA_SPORE;
+            color = '#f97316';
+            initialHealth = 1;
+            speed = 1.45;
+            radius = 12;
+          } else {
+            type = NodeType.FAST_GERM;
+            color = '#df49fa';
+            speed = 2.4;
+            radius = 7;
+            initialHealth = 1;
+          }
+        } else if (stage >= 31) {
+          // Advanced mutated stages (31-59) probabilities and attributes
+          if (roll < 0.16 && stage >= 51) {
+            // Crown Coronavirus (spells of swelling spikes)
+            type = NodeType.CROWN_CORONAVIRUS;
+            color = '#a855f7'; // Purple
+            initialHealth = 3;
+            speed = 1.0 + (stage * 0.01);
+            radius = 15;
+          } else if (roll >= 0.16 && roll < 0.36 && stage >= 41) {
+            // Cyber Phage
+            type = NodeType.CYBER_NANO_PHAGE;
+            color = '#eab308'; // Golden yellow
+            initialHealth = 2;
+            speed = 1.4 + (stage * 0.012);
+            radius = 11;
+          } else if (roll >= 0.36 && roll < 0.56 && stage >= 31) {
+            // Mutated Retrovirus
+            type = NodeType.MUTATED_RETROVIRUS;
+            color = '#ec4899'; // Pink
+            initialHealth = 1;
+            speed = 1.7 + (stage * 0.015);
+            radius = 9;
+          } else if (roll >= 0.56 && roll < 0.72 && stage >= 31) {
+            // Plasma Spore
+            type = NodeType.PLASMA_SPORE;
+            color = '#f97316'; // Orange
+            initialHealth = 1;
+            speed = 1.2 + (stage * 0.008);
+            radius = 12;
+          } else if (roll >= 0.72 && roll < 0.78) {
+            // Support Adrenaline
+            type = NodeType.ADRENALINE;
+            color = '#10b981';
+            speed = 1.1;
+            radius = 11;
+            initialHealth = 1;
+          } else if (roll >= 0.78 && roll < 0.84) {
+            // Pacemaker
+            type = NodeType.PACEMAKER;
+            color = '#38bdf8';
+            speed = 1.0;
+            radius = 12;
+            initialHealth = 1;
+          } else {
+            // Faster standard threats in mutated mode
+            type = NodeType.ARRHYTHMIA;
+            color = '#f97316';
+            speed = 1.3 + (stage * 0.012);
+            radius = 10;
+            initialHealth = 1;
+          }
+        } else if (stage === 30) {
           // Special Boss Stage 30 behavior: Spawns the boss and various intense helpers
           if (roll < 0.08) {
             type = NodeType.GIANT_BOSS;
@@ -2194,10 +2334,12 @@ export default function App() {
 
         {gameState === 'START' && (
           showLevelsView ? (
-            <div id="levels-selection-screen" className="flex flex-col gap-5 py-3 animate-fade-in text-center font-sans">
+            <div id="levels-selection-screen" className="flex flex-col gap-4 py-3 animate-fade-in text-center font-sans">
               {/* Back button */}
               <div className="flex justify-between items-center mb-1">
-                <h3 className="text-xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-red-400 to-amber-400 font-display">خريطة المراحل الـ 30 الإيقاعية 🏆</h3>
+                <h3 className="text-lg font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-red-400 to-amber-400 font-display">
+                  {activeLevelTab === 'CLASSIC' ? "الأوعية الكلاسيكية: المراحل 1 - 30 🏆" : "الطفرة السيبرانية: المراحل 31 - 60 🧪"}
+                </h3>
                 <button
                   onClick={() => setShowLevelsView(false)}
                   className="px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 text-white/90 hover:text-white transition-all text-xs flex items-center gap-1 cursor-pointer"
@@ -2206,14 +2348,44 @@ export default function App() {
                   <span>رجوع</span>
                 </button>
               </div>
-              <p className="text-xs text-white/60 leading-relaxed bg-white/5 p-3 rounded-xl border border-white/5 text-right" dir="rtl">
-                طهر صمامات وعضلات القلب بالتدريج وتجاوز 30 مرحلة من الخطورة والآفات الجرثومية! تزداد وتيرة النبض والعدوانية مع تقدمك.
+
+              {/* Tabs selector */}
+              <div className="flex gap-2 p-1 bg-black/40 rounded-2xl border border-white/5">
+                <button
+                  type="button"
+                  onClick={() => setActiveLevelTab('CLASSIC')}
+                  className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${
+                    activeLevelTab === 'CLASSIC'
+                      ? 'bg-gradient-to-r from-red-500/20 to-red-600/20 text-red-400 border border-red-500/30 shadow-[0_0_12px_rgba(239,68,68,0.15)]'
+                      : 'text-white/60 hover:text-white hover:bg-white/5 border border-transparent'
+                  }`}
+                >
+                  المراحل الكلاسيكية (1 - 30)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveLevelTab('MUTATED')}
+                  className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${
+                    activeLevelTab === 'MUTATED'
+                      ? 'bg-gradient-to-r from-cyan-500/20 to-cyan-600/20 text-cyan-400 border border-cyan-500/30 shadow-[0_0_12px_rgba(6,182,212,0.15)]'
+                      : 'text-white/60 hover:text-white hover:bg-white/5 border border-transparent'
+                  }`}
+                >
+                  الطفرة السيبرانية (31 - 60)
+                </button>
+              </div>
+
+              <p className="text-xs text-white/60 leading-relaxed bg-white/5 p-3 rounded-xl border border-white/5 text-right font-sans" dir="rtl">
+                {activeLevelTab === 'CLASSIC' 
+                  ? "طهر صمامات وعضلات القلب بالتدريج وتجاوز 30 مرحلة من الخطورة والآفات الجرثومية! تزداد وتيرة النبض والعدوانية مع تقدمك."
+                  : "⚠️ تحذير الطفرة السيبرانية: 30 مرحلة جديدة تختلف عن ال30 الأولى تماماً ببيئة لعب زرقاء مجهرية، جراثيم إلكترونية ذكية، وموسيقى طوارئ تركيبية مختلفة!"
+                }
               </p>
 
-              {/* levels list (1-30) */}
-              <div className="grid grid-cols-5 gap-2 max-h-[360px] overflow-y-auto pr-1">
+              {/* levels list */}
+              <div className="grid grid-cols-5 gap-2 max-h-[280px] overflow-y-auto pr-1">
                 {Array.from({ length: 30 }).map((_, i) => {
-                  const lNum = i + 1;
+                  const lNum = activeLevelTab === 'CLASSIC' ? (i + 1) : (i + 31);
                   const isUnlocked = lNum <= maxUnlockedLevel;
                   const isCompleted = lNum < maxUnlockedLevel || JSON.parse(localStorage.getItem('nabdah_completed_levels_v1') || '[]').includes(lNum);
 
@@ -2229,7 +2401,9 @@ export default function App() {
                           ? 'bg-black/45 border-white/5 text-white/20 cursor-not-allowed opacity-50'
                           : isCompleted
                             ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400 hover:scale-[1.05] shadow-[0_0_10px_rgba(16,185,129,0.15)]'
-                            : 'bg-white/5 border-white/10 text-white hover:border-red-500 hover:scale-[1.05]'
+                            : activeLevelTab === 'MUTATED'
+                              ? 'bg-cyan-500/5 border-cyan-500/20 text-cyan-300 hover:border-cyan-400 hover:scale-[1.05]'
+                              : 'bg-white/5 border-white/10 text-white hover:border-red-500 hover:scale-[1.05]'
                       }`}
                     >
                       {/* Status Check / Lock */}
@@ -2238,7 +2412,7 @@ export default function App() {
                       ) : isCompleted ? (
                         <Check className="w-3.5 h-3.5 text-emerald-400 mb-0.5" />
                       ) : (
-                        <span className="text-[8px] text-white/40 tracking-tight font-mono mb-0.5">هدف: {lNum * 100 + 50}</span>
+                        <span className="text-[8px] text-white/40 tracking-tight font-mono mb-0.5">هدف: {getStageConfig(lNum).targetScore}</span>
                       )}
                       <span className="text-sm font-black font-mono">{lNum}</span>
                       <span className="text-[7px] text-white/40 font-sans">مرحلة</span>
@@ -2628,6 +2802,8 @@ export default function App() {
                     onTapNode={handleTapNode}
                     onMissNode={handleMissNode}
                     isPaused={false}
+                    currentLevel={currentLevel}
+                    gameMode={gameMode}
                   />
                 </div>
 
@@ -2687,6 +2863,8 @@ export default function App() {
                     onTapNode={handleTapNode2}
                     onMissNode={handleMissNode2}
                     isPaused={false}
+                    currentLevel={currentLevel}
+                    gameMode={gameMode}
                   />
                 </div>
 
@@ -2802,6 +2980,8 @@ export default function App() {
                   onTapNode={handleTapNode}
                   onMissNode={handleMissNode}
                   isPaused={false}
+                  currentLevel={currentLevel}
+                  gameMode={gameMode}
                 />
               </>
             )}
@@ -2986,7 +3166,7 @@ export default function App() {
               
               <div className="flex justify-between items-center text-xs">
                 <span className="text-white/60">المرحلة المنجزة:</span>
-                <span className="font-bold text-white font-mono">مرحلة {currentLevel} من أصل 30</span>
+                <span className="font-bold text-white font-mono">مرحلة {currentLevel} من أصل 60</span>
               </div>
               
               <div className="flex justify-between items-center text-xs">
@@ -3007,7 +3187,7 @@ export default function App() {
 
             {/* Navigation options */}
             <div className="flex flex-col gap-2.5 mt-2">
-              {currentLevel < 30 ? (
+              {currentLevel < 60 ? (
                 <button
                   id="next-level-btn"
                   onClick={() => startGame('LEVELS', currentLevel + 1)}
@@ -3017,7 +3197,7 @@ export default function App() {
                 </button>
               ) : (
                 <div className="py-2.5 px-4 bg-amber-500/10 border border-amber-500/35 text-amber-400 text-xs rounded-xl font-bold">
-                  🎖️ أهلاً بك في صف الرائد الإيقاعي! لقد أكملت جميع المراحل الـ 30 بنجاح فائق!
+                  🎖️ أهلاً بك في صف الرائد الإيقاعي! لقد أكملت جميع المراحل الـ 60 بنجاح فائق وتغلبت على الطفرة السيبرانية الحيوية!
                 </div>
               )}
 

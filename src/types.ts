@@ -13,7 +13,12 @@ export enum NodeType {
   BIG_BACTERIA = 'BIG_BACTERIA', // Big green bacteria (3 hits, spawns small bacteria)
   SMALL_BACTERIA = 'SMALL_BACTERIA', // Smaller green bacteria (2 hits)
   FAST_GERM = 'FAST_GERM', // Extremely small, ultra-fast glowing violet germ (1 hit)
-  GIANT_BOSS = 'GIANT_BOSS' // Huge boss bacteria for level 30 (10 hits, spawns helpers)
+  GIANT_BOSS = 'GIANT_BOSS', // Huge boss bacteria for level 30 (10 hits, spawns helpers)
+  MUTATED_RETROVIRUS = 'MUTATED_RETROVIRUS', // Fast, translucent shape with long tendrils (Level 31+)
+  CYBER_NANO_PHAGE = 'CYBER_NANO_PHAGE',     // Apollo-shaped yellow/neon, teleports in erratic steps (Level 31+)
+  PLASMA_SPORE = 'PLASMA_SPORE',             // Glowing hot coral sphere with shifting tentacles (Level 31+)
+  CROWN_CORONAVIRUS = 'CROWN_CORONAVIRUS',   // Large spiked purple virus, needs 3 hits and swells in size (Level 31+)
+  NANO_MEGA_BOSS = 'NANO_MEGA_BOSS'          // Huge mechanical megaboss for Level 60 (15 hits!)
 }
 
 export interface GameNode {
