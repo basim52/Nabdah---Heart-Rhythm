@@ -1,0 +1,166 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "User Profile",
+      "description": "Registered player profiles with status indicators",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "The unique Firebase Auto UID of the user"
+        },
+        "email": {
+          "type": "string",
+          "description": "Contact email"
+        },
+        "displayName": {
+          "type": "string",
+          "description": "Public name"
+        },
+        "photoURL": {
+          "type": "string",
+          "description": "Profile picture URL"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "online",
+            "offline",
+            "ingame"
+          ],
+          "description": "Immediate network connection status"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Server timestamp when profile was modified"
+        }
+      },
+      "required": [
+        "uid",
+        "email",
+        "displayName",
+        "status",
+        "updatedAt"
+      ]
+    },
+    "Friend": {
+      "title": "Friendship",
+      "description": "Bidirectional connection between two verified user accounts",
+      "type": "object",
+      "properties": {
+        "user1": {
+          "type": "string",
+          "description": "First user ID"
+        },
+        "user2": {
+          "type": "string",
+          "description": "Second user ID"
+        },
+        "user1Email": {
+          "type": "string",
+          "description": "First user email"
+        },
+        "user2Email": {
+          "type": "string",
+          "description": "Second user email"
+        },
+        "user1Name": {
+          "type": "string",
+          "description": "First user name"
+        },
+        "user2Name": {
+          "type": "string",
+          "description": "Second user name"
+        },
+        "user1Photo": {
+          "type": "string",
+          "description": "First user photo"
+        },
+        "user2Photo": {
+          "type": "string",
+          "description": "Second user photo"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "pending",
+            "accepted"
+          ],
+          "description": "Status of friend invitation"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Time of connection update"
+        }
+      },
+      "required": [
+        "user1",
+        "user2",
+        "user1Email",
+        "user2Email",
+        "user1Name",
+        "user2Name",
+        "status",
+        "updatedAt"
+      ]
+    },
+    "Invitation": {
+      "title": "Invitation",
+      "description": "Co-op game invitation to play together in a challenge session",
+      "type": "object",
+      "properties": {
+        "senderId": {
+          "type": "string",
+          "description": "UID of inviting player"
+        },
+        "senderName": {
+          "type": "string",
+          "description": "Display name of inviting player"
+        },
+        "receiverId": {
+          "type": "string",
+          "description": "UID of invited player"
+        },
+        "roomCode": {
+          "type": "string",
+          "description": "Random generated live websocket room code"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "pending",
+            "accepted",
+            "declined"
+          ],
+          "description": "Immediate decision status"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Database server time"
+        }
+      },
+      "required": [
+        "senderId",
+        "senderName",
+        "receiverId",
+        "roomCode",
+        "status",
+        "createdAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "Holds searchable user profiles of players"
+    },
+    "/friendships/{friendshipId}": {
+      "schema": "Friend",
+      "description": "Saves friendships and pending requests"
+    },
+    "/invitations/{invitationId}": {
+      "schema": "Invitation",
+      "description": "Transmitted live game invitations and their states"
+    }
+  }
+}

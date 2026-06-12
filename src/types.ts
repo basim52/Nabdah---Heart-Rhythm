@@ -9,7 +9,11 @@ export enum NodeType {
   VIRUS = 'VIRUS',            // Golden bio-threat (fast, sweeps orbitally)
   ARRHYTHMIA = 'ARRHYTHMIA',  // Orange erratic pulse (speed fluctuates, zig-zags)
   ADRENALINE = 'ADRENALINE',  // Bright green heartbeat boost (heals +15% Health)
-  PACEMAKER = 'PACEMAKER'     // Bright cyan/blue stabilizer (slows down obstacle velocities for 5s)
+  PACEMAKER = 'PACEMAKER',    // Bright cyan/blue stabilizer (slows down obstacle velocities for 5s)
+  BIG_BACTERIA = 'BIG_BACTERIA', // Big green bacteria (3 hits, spawns small bacteria)
+  SMALL_BACTERIA = 'SMALL_BACTERIA', // Smaller green bacteria (2 hits)
+  FAST_GERM = 'FAST_GERM', // Extremely small, ultra-fast glowing violet germ (1 hit)
+  GIANT_BOSS = 'GIANT_BOSS' // Huge boss bacteria for level 30 (10 hits, spawns helpers)
 }
 
 export interface GameNode {
@@ -25,6 +29,7 @@ export interface GameNode {
   maxHealth: number;       // Original taps needed
   pulseScale: number;      // Visual organic scale
   color: string;
+  lastSummonTime?: number; // timestamp of last spawn for big bacteria
 }
 
 export interface HitParticle {
@@ -67,4 +72,4 @@ export interface ScoreRecord {
   gameMode?: 'ENDLESS' | 'TIMED';
 }
 
-export type GameState = 'START' | 'PLAYING' | 'GAMEOVER' | 'HOWTO';
+export type GameState = 'START' | 'PLAYING' | 'GAMEOVER' | 'HOWTO' | 'LEVEL_COMPLETE';

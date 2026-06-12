@@ -425,6 +425,54 @@ export const HeartGameCanvas: React.FC<HeartGameCanvasProps> = ({
           ctx.beginPath();
           ctx.arc(nx, ny, 2, 0, Math.PI * 2);
           ctx.fill();
+        } else if (node.type === NodeType.BIG_BACTERIA) {
+          // Big biological green bacterium with rotating tentacles and double core
+          ctx.strokeStyle = 'rgba(34, 197, 94, 0.4)';
+          ctx.lineWidth = 1.5;
+          const numTentacles = 6;
+          for (let i = 0; i < numTentacles; i++) {
+            const rotAngle = (i / numTentacles) * Math.PI * 2 + (Date.now() / 350);
+            const midDist = node.radius * 1.3 + Math.sin(Date.now() / 150 + i) * 3;
+            const endX = nx + Math.cos(rotAngle) * midDist;
+            const endY = ny + Math.sin(rotAngle) * midDist;
+            ctx.beginPath();
+            ctx.moveTo(nx, ny);
+            ctx.quadraticCurveTo(
+              nx + Math.cos(rotAngle + 0.3) * (node.radius * 0.8),
+              ny + Math.sin(rotAngle + 0.3) * (node.radius * 0.8),
+              endX,
+              endY
+            );
+            ctx.stroke();
+            
+            // Draw a little tip
+            ctx.fillStyle = '#4ade80';
+            ctx.beginPath();
+            ctx.arc(endX, endY, 2, 0, Math.PI * 2);
+            ctx.fill();
+          }
+
+          // Inner yellow/green core details
+          ctx.strokeStyle = '#ffffffaa';
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.arc(nx, ny, node.radius * 0.45, 0, Math.PI * 2);
+          ctx.stroke();
+        } else if (node.type === NodeType.SMALL_BACTERIA) {
+          // Small biological green bacterium with tiny rotating tails
+          ctx.strokeStyle = 'rgba(74, 222, 128, 0.4)';
+          ctx.lineWidth = 1.0;
+          const numTentacles = 4;
+          for (let i = 0; i < numTentacles; i++) {
+            const rotAngle = (i / numTentacles) * Math.PI * 2 + (Date.now() / 250);
+            const midDist = node.radius * 1.25 + Math.sin(Date.now() / 100 + i) * 2;
+            const endX = nx + Math.cos(rotAngle) * midDist;
+            const endY = ny + Math.sin(rotAngle) * midDist;
+            ctx.beginPath();
+            ctx.moveTo(nx, ny);
+            ctx.lineTo(endX, endY);
+            ctx.stroke();
+          }
         } else if (node.type === NodeType.ARRHYTHMIA) {
           // High speed flashing warning detail
           ctx.strokeStyle = '#ffffffdd';
@@ -479,6 +527,77 @@ export const HeartGameCanvas: React.FC<HeartGameCanvasProps> = ({
             ctx.arc(satX, satY, 2, 0, Math.PI * 2);
             ctx.fill();
           }
+        } else if (node.type === NodeType.FAST_GERM) {
+          // Extremely fast violet germ with glowing tail and high speed trails
+          ctx.strokeStyle = 'rgba(217, 70, 239, 0.6)';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          // Draw a small lightning/tail pointing away from the center
+          const angleToHeart = Math.atan2(ny - cy, nx - cx);
+          const backX = nx + Math.cos(angleToHeart) * (node.radius * 1.5);
+          const backY = ny + Math.sin(angleToHeart) * (node.radius * 1.5);
+          ctx.moveTo(nx, ny);
+          ctx.lineTo(backX, backY);
+          ctx.stroke();
+
+          ctx.fillStyle = '#fdf4ff';
+          ctx.beginPath();
+          ctx.arc(nx, ny, 2, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (node.type === NodeType.GIANT_BOSS) {
+          // Huge boss bacteria with pulsing shield rings, 3 red glowing nuclei, and organic rotating spikes
+          ctx.strokeStyle = 'rgba(239, 68, 68, 0.5)';
+          ctx.lineWidth = 2.5;
+          ctx.beginPath();
+          ctx.arc(nx, ny, node.radius * 1.25 + Math.sin(Date.now() / 100) * 3, 0, Math.PI * 2);
+          ctx.stroke();
+
+          // Pulsing inner shield
+          ctx.strokeStyle = '#a855f7';
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.arc(nx, ny, node.radius * 0.85, 0, Math.PI * 2);
+          ctx.stroke();
+
+          // Waving scary organic spikes
+          ctx.strokeStyle = '#22c55e';
+          ctx.lineWidth = 2;
+          const spikesCount = 10;
+          for (let i = 0; i < spikesCount; i++) {
+            const angle = (i / spikesCount) * Math.PI * 2 + (Date.now() / 400);
+            const spikeLength = node.radius * 1.4 + Math.sin(Date.now() / 120 + i) * 5;
+            const sx = nx + Math.cos(angle) * spikeLength;
+            const sy = ny + Math.sin(angle) * spikeLength;
+            ctx.beginPath();
+            ctx.moveTo(nx, ny);
+            ctx.lineTo(sx, sy);
+            ctx.stroke();
+
+            // Tiny dangerous tips
+            ctx.fillStyle = '#ef4444';
+            ctx.beginPath();
+            ctx.arc(sx, sy, 3, 0, Math.PI * 2);
+            ctx.fill();
+          }
+
+          // 3 scary red eyes
+          ctx.fillStyle = '#ef4444';
+          const eyeOffsets = [
+            { dx: -4, dy: -3 },
+            { dx: 4, dy: -3 },
+            { dx: 0, dy: 4 }
+          ];
+          eyeOffsets.forEach(eye => {
+            ctx.beginPath();
+            ctx.arc(nx + eye.dx, ny + eye.dy, 2.5, 0, Math.PI * 2);
+            ctx.fill();
+            // shiny point
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath();
+            ctx.arc(nx + eye.dx - 0.7, ny + eye.dy - 0.7, 0.8, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#ef4444'; // restore for remaining eyes
+          });
         } else {
           // Standard electric disruption ring
           ctx.strokeStyle = '#ffffff88';
@@ -574,25 +693,21 @@ export const HeartGameCanvas: React.FC<HeartGameCanvasProps> = ({
   }, [nodes, particles, floatingTexts, heartHealth, currentBPM, beatScale, isOnBeat, score, combo, onMissNode]);
 
   // Handle Touch/Click events
-  const handleCanvasTap = (e: React.MouseEvent<HTMLCanvasElement>) => {
+  const processTap = (clientX: number, clientY: number) => {
     if (isPaused || heartHealth <= 0) return;
 
     const canvas = canvasRef.current;
     if (!canvas) return;
 
     const rect = canvas.getBoundingClientRect();
-    // Resolve page coordinates to real scaled element coordinates
-    const tapX = ((e.clientX - rect.left) / rect.width) * canvas.width;
-    const tapY = ((e.clientY - rect.top) / rect.height) * canvas.height;
+    const tapX = ((clientX - rect.left) / rect.width) * canvas.width;
+    const tapY = ((clientY - rect.top) / rect.height) * canvas.height;
 
     const cx = canvas.width / 2;
     const cy = canvas.height / 2;
 
-    // Detect if we hit any node
     let matchedNode: GameNode | null = null;
     let closestDistForTap = Infinity;
-
-    // Give a generous, friendly tap hit box of 34px radius (68px circle)
     const tapHitboxRadius = 34;
 
     nodes.forEach((node) => {
@@ -604,7 +719,6 @@ export const HeartGameCanvas: React.FC<HeartGameCanvasProps> = ({
       const dist = Math.sqrt(dx * dx + dy * dy);
 
       if (dist <= node.radius + tapHitboxRadius) {
-        // Find the node closest to the cursor that qualifies
         if (dist < closestDistForTap) {
           closestDistForTap = dist;
           matchedNode = node;
@@ -614,12 +728,23 @@ export const HeartGameCanvas: React.FC<HeartGameCanvasProps> = ({
 
     if (matchedNode) {
       const node: GameNode = matchedNode;
-      // Triggers node hit event with performance score logic
-      // Normal hit or Rhythm Perfect Hit
       onTapNode(node.id, isOnBeat, tapX, tapY);
-    } else {
-      // Tapped empty space - optional penalty or subtle flat click ripple
-      // No penalty makes it friendly on small mobile frames, but we can play a silent tap bubble.
+    }
+  };
+
+  const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    // Left click only
+    if (e.button !== 0) return;
+    processTap(e.clientX, e.clientY);
+  };
+
+  const handleCanvasTouchStart = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    // Multi-touch helper
+    if (e.changedTouches) {
+      for (let i = 0; i < e.changedTouches.length; i++) {
+        const touch = e.changedTouches[i];
+        processTap(touch.clientX, touch.clientY);
+      }
     }
   };
 
@@ -630,7 +755,8 @@ export const HeartGameCanvas: React.FC<HeartGameCanvasProps> = ({
         ref={canvasRef}
         width={380}
         height={380}
-        onClick={handleCanvasTap}
+        onMouseDown={handleCanvasClick}
+        onTouchStart={handleCanvasTouchStart}
         className="w-full h-full block cursor-pointer transition-transform duration-100 active:scale-[0.99]"
       />
     </div>

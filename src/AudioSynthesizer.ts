@@ -18,6 +18,13 @@ export class AudioSynthesizer {
   private tensionOscillator: OscillatorNode | null = null;
   private tensionGain: GainNode | null = null;
 
+  // Juicy high-tension rhythmic & rock/heavy synth boss layers
+  private bossOscillator: OscillatorNode | null = null;
+  private bossOscillator2: OscillatorNode | null = null;
+  private bossGain: GainNode | null = null;
+  private dangerPulseOscillator: OscillatorNode | null = null;
+  private dangerPulseGain: GainNode | null = null;
+
   constructor() {
     // Audio is loaded lazily on user gesture to comply with browser autoplay policies
   }
@@ -404,27 +411,114 @@ export class AudioSynthesizer {
   /**
    * Updates ambient soundtrack parameters dynamically in real time as BPM accelerates
    */
-  public updateAmbientBPM(bpm: number): void {
+  public updateAmbientBPM(bpm: number, isDanger: boolean = false, isBoss: boolean = false): void {
     if (!this.ctx || !this.ambientFilter || !this.ambientLfo || !this.ambientLfoGain || !this.tensionGain) return;
 
     const now = this.ctx.currentTime;
 
     try {
       // 1. Double/single pulse sync LFO speed with the player's accelerated rhythm
-      const lfoFreq = (bpm / 60) * 1.0;
+      const lfoFreq = (bpm / 60) * (isDanger ? 1.6 : 1.0);
       this.ambientLfo.frequency.setTargetAtTime(lfoFreq, now, 0.5);
 
       // 2. Expand LFO breath depth to feel more chaotic and panic-stricken at higher BPMs
-      const lfoDepth = 0.04 + Math.max(0, (bpm - 72) / 72) * 0.08;
+      const lfoDepth = (isDanger ? 0.08 : 0.04) + Math.max(0, (bpm - 72) / 72) * 0.08;
       this.ambientLfoGain.gain.setTargetAtTime(lfoDepth, now, 0.4);
 
-      // 3. Expand Lowpass cut-off frequency to expose sharp harsh harmonics
-      const cutoff = 180 + Math.max(0, (bpm - 72) / 72) * 520;
+      // 3. Expand Lowpass cut-off frequency massively to make it louder, sharp, and frantic (صاخبة وحماسية)
+      let cutoff = 180 + Math.max(0, (bpm - 72) / 72) * 520;
+      if (isBoss) {
+        cutoff = Math.max(cutoff, 1800); // Massive bright frequencies to sound extremely frantic
+      } else if (isDanger) {
+        cutoff = Math.max(cutoff, 1100); // Bright alarm frequencies
+      }
       this.ambientFilter.frequency.setTargetAtTime(cutoff, now, 0.8);
 
-      // 4. Fade in the High Tension alarm note as BPM grows (inducing high focus)
-      const tensionVol = Math.max(0, (bpm - 72) / 72) * 0.20;
+      // 4. Fade in the High Tension alarm note as BPM grows
+      const tensionVol = (isDanger ? 0.35 : 0.12) + Math.max(0, (bpm - 72) / 72) * 0.20;
       this.tensionGain.gain.setTargetAtTime(tensionVol, now, 0.6);
+
+      // ================== DYNAMIC BOSS SYNTH ENGINES ==================
+      if (isBoss) {
+        // If boss node doesn't exist, instantiate heavy grinding bass riffs
+        if (!this.bossOscillator && this.masterGain) {
+          this.bossOscillator = this.ctx.createOscillator();
+          this.bossOscillator2 = this.ctx.createOscillator();
+          this.bossGain = this.ctx.createGain();
+
+          this.bossOscillator.type = 'sawtooth';
+          this.bossOscillator2.type = 'sawtooth';
+          
+          this.bossOscillator.frequency.setValueAtTime(55.0, now); // Low A1
+          this.bossOscillator2.frequency.setValueAtTime(65.41, now); // Low C2 (Dissonant minor third)
+          
+          // Gritty lowpass filter for sub-bass punch
+          const bossFilter = this.ctx.createBiquadFilter();
+          bossFilter.type = 'lowpass';
+          bossFilter.frequency.setValueAtTime(180, now);
+
+          this.bossGain.gain.setValueAtTime(0, now);
+          
+          this.bossOscillator.connect(bossFilter);
+          this.bossOscillator2.connect(bossFilter);
+          bossFilter.connect(this.bossGain);
+          this.bossGain.connect(this.masterGain);
+
+          this.bossOscillator.start(now);
+          this.bossOscillator2.start(now);
+        }
+
+        if (this.bossGain) {
+          // Epic bass swells in and out with the tension tempo!
+          const pulseGain = 0.28 + Math.sin(now * 8) * 0.08;
+          this.bossGain.gain.setTargetAtTime(pulseGain, now, 0.3);
+        }
+      } else {
+        // Fade out boss synth if no longer playing boss
+        if (this.bossGain) {
+          this.bossGain.gain.setTargetAtTime(0, now, 0.5);
+        }
+      }
+
+      // ================== DYNAMIC DANGER ALARM PULSER ==================
+      if (isDanger) {
+        if (!this.dangerPulseOscillator && this.masterGain) {
+          this.dangerPulseOscillator = this.ctx.createOscillator();
+          this.dangerPulseGain = this.ctx.createGain();
+
+          this.dangerPulseOscillator.type = 'sine';
+          this.dangerPulseOscillator.frequency.setValueAtTime(660, now); // Tense squeal E5
+
+          // Drive a rapid panic pulse LFO
+          const panicLfo = this.ctx.createOscillator();
+          const panicLfoGain = this.ctx.createGain();
+          panicLfo.type = 'square';
+          panicLfo.frequency.setValueAtTime(6.0, now); // Quick rapid 6Hz pulses
+          panicLfoGain.gain.setValueAtTime(0.3, now);
+
+          panicLfo.connect(panicLfoGain);
+          panicLfoGain.connect(this.dangerPulseGain.gain);
+
+          this.dangerPulseGain.gain.setValueAtTime(0.08, now);
+          this.dangerPulseOscillator.connect(this.dangerPulseGain);
+          this.dangerPulseGain.connect(this.masterGain);
+
+          panicLfo.start(now);
+          this.dangerPulseOscillator.start(now);
+
+          // Keep reference to panic LFO to stop it in cleanup
+          (this.dangerPulseOscillator as any).extraLfo = panicLfo;
+        }
+
+        if (this.dangerPulseGain) {
+          this.dangerPulseGain.gain.setTargetAtTime(0.18, now, 0.3);
+        }
+      } else {
+        if (this.dangerPulseGain) {
+          this.dangerPulseGain.gain.setTargetAtTime(0, now, 0.5);
+        }
+      }
+
     } catch (e) {
       console.warn("Real-time ambient track update failed", e);
     }
@@ -434,6 +528,8 @@ export class AudioSynthesizer {
    * Shuts down all procedural ambient soundtrack nodes safely
    */
   public stopAmbientSoundtrack(): void {
+    const now = this.ctx ? this.ctx.currentTime : 0;
+
     // 1. Terminate LFO safely
     if (this.ambientLfo) {
       try {
@@ -461,5 +557,78 @@ export class AudioSynthesizer {
     }
     this.tensionGain = null;
     this.ambientFilter = null;
+
+    // 4. Terminate boss oscillators
+    if (this.bossOscillator) {
+      try {
+        this.bossOscillator.stop();
+      } catch (e) {}
+      this.bossOscillator = null;
+    }
+    if (this.bossOscillator2) {
+      try {
+        this.bossOscillator2.stop();
+      } catch (e) {}
+      this.bossOscillator2 = null;
+    }
+    this.bossGain = null;
+
+    // 5. Terminate danger pulse oscillator and its extra LFO
+    if (this.dangerPulseOscillator) {
+      try {
+        if ((this.dangerPulseOscillator as any).extraLfo) {
+          (this.dangerPulseOscillator as any).extraLfo.stop();
+        }
+        this.dangerPulseOscillator.stop();
+      } catch (e) {}
+      this.dangerPulseOscillator = null;
+    }
+    this.dangerPulseGain = null;
+  }
+
+  /**
+   * Synthesizes a biological summoning sound (spawning smaller bacteria).
+   */
+  public playSummonSound(): void {
+    if (!this.ctx || !this.masterGain) return;
+    if (this.ctx.state === 'suspended') return;
+
+    const now = this.ctx.currentTime;
+
+    try {
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+
+      osc.type = 'triangle';
+      
+      // Slithery slide pitch sweep downward (e.g. 350Hz down to 100Hz)
+      osc.frequency.setValueAtTime(320, now);
+      osc.frequency.exponentialRampToValueAtTime(80, now + 0.35);
+
+      // Simple vibrato (LFO frequency modulator)
+      const vibrato = this.ctx.createOscillator();
+      const vibratoGain = this.ctx.createGain();
+      vibrato.type = 'sine';
+      vibrato.frequency.setValueAtTime(20, now); // fast oscillation
+      vibratoGain.gain.setValueAtTime(12, now); // detuning amount
+
+      vibrato.connect(vibratoGain);
+      vibratoGain.connect(osc.frequency);
+
+      gain.gain.setValueAtTime(0, now);
+      gain.gain.linearRampToValueAtTime(0.25, now + 0.05);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+
+      osc.connect(gain);
+      gain.connect(this.masterGain);
+
+      vibrato.start(now);
+      osc.start(now);
+
+      vibrato.stop(now + 0.4);
+      osc.stop(now + 0.4);
+    } catch (e) {
+      console.warn("Summon sound fail", e);
+    }
   }
 }
