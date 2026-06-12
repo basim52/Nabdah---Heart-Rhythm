@@ -1969,7 +1969,11 @@ export default function App() {
   };
 
   const startOnlineMatch = async (isHost: boolean, teammateName: string, roomCodeStr: string) => {
-    await audioSynthRef.current.initialize();
+    try {
+      await audioSynthRef.current.initialize();
+    } catch (e) {
+      console.warn('Audio visualization/playback initialization skipped:', e);
+    }
     
     setGameMode('ENDLESS');
     setTimeLeft(60);
@@ -2218,10 +2222,18 @@ export default function App() {
       await updateDoc(docRef, {
         status: 'accepted'
       });
+      // Try initializing the audio context too
+      try {
+        await audioSynthRef.current.initialize();
+      } catch (err) {
+        console.warn('Audio initialization ignored inside accept game connection', err);
+      }
       connectToWebSocket(incomingInvite.roomCode, playerName, 'GUEST');
-      setIncomingInvite(null);
     } catch (e) {
       console.error('Failed to accept invitation', e);
+      alert('لم نتمكن من إتمام الاتصال بالخادم السحابي لقبول الدعوة. جرب اللعب الفردي!');
+    } finally {
+      setIncomingInvite(null);
     }
   };
 
@@ -2232,16 +2244,21 @@ export default function App() {
       await updateDoc(docRef, {
         status: 'declined'
       });
-      setIncomingInvite(null);
     } catch (e) {
       console.error('Decline failed', e);
+    } finally {
+      setIncomingInvite(null);
     }
   };
 
   // Safe game initialisation
   const startGame = async (selectedMode: 'ENDLESS' | 'TIMED' | 'LEVELS' = 'ENDLESS', specificLevel?: number) => {
     // Init Audio Context safely via user click gesture
-    await audioSynthRef.current.initialize();
+    try {
+      await audioSynthRef.current.initialize();
+    } catch (e) {
+      console.warn('AudioContext failed to initialize (continuing to start game silently)', e);
+    }
     
     // Set Game Mode
     setGameMode(selectedMode);
@@ -2281,7 +2298,11 @@ export default function App() {
 
   const startSplitScreenGame = async (selectedMode: 'ENDLESS' | 'TIMED' = 'ENDLESS') => {
     // Init Audio Context safely via user click gesture
-    await audioSynthRef.current.initialize();
+    try {
+      await audioSynthRef.current.initialize();
+    } catch (e) {
+      console.warn('AudioContext failed to initialize (continuing to start game silently)', e);
+    }
     
     // Set Game Mode
     setGameMode(selectedMode);
@@ -2390,25 +2411,42 @@ export default function App() {
 
         {/* INCOMING COOP CHALLENGE INVITATION */}
         {incomingInvite && (
-          <div className="backdrop-blur-xl bg-slate-950/95 border-2 border-red-500 rounded-3xl p-5 shadow-[0_0_30px_rgba(239,68,68,0.30)] flex flex-col gap-4 text-center animate-bounce z-50">
-            <div className="flex items-center justify-center gap-2 text-red-400">
-              <Activity className="w-5 h-5 animate-pulse" />
+          <div className="backdrop-blur-xl bg-slate-950/98 border-2 border-red-500 rounded-3xl p-5 shadow-[0_0_30px_rgba(239,68,68,0.40)] flex flex-col gap-4 text-center animate-fade-in z-50">
+            <div className="flex items-center justify-center gap-2 text-red-050">
+              <Activity className="w-5 h-5 animate-pulse text-red-400" />
               <h4 className="text-sm font-extrabold font-display">تحدي إنعاش تشاركي عاجل! ❤️</h4>
             </div>
             <p className="text-xs text-white/90 leading-relaxed font-sans" dir="rtl">
               يدعوك الزميل الطبيب <strong className="text-red-400 font-extrabold">{incomingInvite.senderName}</strong> للانضمام إليه في العناية المركزة لحماية القلب من البكتيريا الفتاكة! هل أنت مستعد للتعاون؟
             </p>
+            {isConnectingWs && (
+              <div className="flex flex-col items-center gap-2 py-1.5 px-3 bg-white/5 rounded-xl border border-white/10 animate-pulse text-right" dir="rtl">
+                <div className="w-5 h-5 border-2 border-t-red-500 border-white/20 rounded-full animate-spin" />
+                <p className="text-[10px] text-white/80 font-bold">جاري تشبيك المسيرات الحيوية والربط الصوتي المتزامن...</p>
+              </div>
+            )}
             <div className="flex gap-2">
               <button
                 onClick={acceptInvite}
-                className="flex-1 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold transition-all active:scale-95 cursor-pointer flex items-center justify-center gap-1.5"
+                disabled={isConnectingWs}
+                className="flex-1 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 disabled:bg-emerald-800 disabled:opacity-50 text-white text-xs font-bold transition-all active:scale-95 cursor-pointer disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
               >
-                <Check className="w-3.5 h-3.5" />
-                <span>قبول التحدي والتطهير</span>
+                {isConnectingWs ? (
+                  <>
+                    <div className="w-3 h-3 border-2 border-t-white border-transparent rounded-full animate-spin" />
+                    <span>جاري الاتصال...</span>
+                  </>
+                ) : (
+                  <>
+                    <Check className="w-3.5 h-3.5" />
+                    <span>قبول التحدي والتطهير</span>
+                  </>
+                )}
               </button>
               <button
                 onClick={declineInvite}
-                className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-white/80 text-xs transition-all active:scale-95 cursor-pointer flex items-center justify-center gap-1.5"
+                disabled={isConnectingWs}
+                className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/15 disabled:opacity-50 text-white/80 text-xs transition-all active:scale-95 cursor-pointer disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
               >
                 <X className="w-3.5 h-3.5" />
                 <span>تراجع</span>
