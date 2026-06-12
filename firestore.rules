@@ -40,12 +40,13 @@ service cloud.firestore {
     }
 
     function isValidUserProfile(data) {
-      return data.uid == request.auth.uid
-        && (data.email == null || (data.email is string && data.email.size() <= 150))
-        && data.displayName is string && data.displayName.size() <= 80
-        && data.status in ['online', 'offline', 'ingame']
-        && (data.maxUnlockedLevel == null || data.maxUnlockedLevel is int)
-        && (data.completedLevels == null || data.completedLevels is list);
+      return (!('uid' in data) || data.uid == request.auth.uid)
+        && (!('email' in data) || (data.email is string && data.email.size() <= 150))
+        && (!('displayName' in data) || (data.displayName is string && data.displayName.size() <= 80))
+        && (!('photoURL' in data) || (data.photoURL is string && data.photoURL.size() <= 1000))
+        && (!('status' in data) || data.status in ['online', 'offline', 'ingame'])
+        && (!('maxUnlockedLevel' in data) || (data.maxUnlockedLevel is int || data.maxUnlockedLevel is float))
+        && (!('completedLevels' in data) || data.completedLevels is list);
     }
 
     // Friendships Entity Collection Rules
@@ -61,11 +62,13 @@ service cloud.firestore {
 
     function isValidFriend(data) {
       return (data.user1 == request.auth.uid || data.user2 == request.auth.uid)
-        && data.user1Name is string && data.user1Name.size() <= 80
-        && data.user2Name is string && data.user2Name.size() <= 80
-        && (data.user1Email == null || (data.user1Email is string && data.user1Email.size() <= 150))
-        && (data.user2Email == null || (data.user2Email is string && data.user2Email.size() <= 150))
-        && data.status in ['pending', 'accepted'];
+        && (!('user1Name' in data) || (data.user1Name is string && data.user1Name.size() <= 80))
+        && (!('user2Name' in data) || (data.user2Name is string && data.user2Name.size() <= 80))
+        && (!('user1Email' in data) || (data.user1Email is string && data.user1Email.size() <= 150))
+        && (!('user2Email' in data) || (data.user2Email is string && data.user2Email.size() <= 150))
+        && (!('user1Photo' in data) || (data.user1Photo is string && data.user1Photo.size() <= 1000))
+        && (!('user2Photo' in data) || (data.user2Photo is string && data.user2Photo.size() <= 1000))
+        && (!('status' in data) || data.status in ['pending', 'accepted']);
     }
 
     // Live Invitations Collection Rules
@@ -79,9 +82,9 @@ service cloud.firestore {
 
     function isValidInvitation(data) {
       return (data.senderId == request.auth.uid || data.receiverId == request.auth.uid)
-        && data.senderName is string && data.senderName.size() <= 80
-        && data.roomCode is string && data.roomCode.size() <= 20
-        && data.status in ['pending', 'accepted', 'declined'];
+        && (!('senderName' in data) || (data.senderName is string && data.senderName.size() <= 80))
+        && (!('roomCode' in data) || (data.roomCode is string && data.roomCode.size() <= 20))
+        && (!('status' in data) || data.status in ['pending', 'accepted', 'declined']);
     }
   }
 }

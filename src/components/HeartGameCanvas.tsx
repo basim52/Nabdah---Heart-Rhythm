@@ -548,6 +548,48 @@ export const HeartGameCanvas: React.FC<HeartGameCanvasProps> = ({
         ctx.restore();
       }
 
+      // FEVER OVERDRIVE GLOW SYSTEM (25 years experience visual juice)
+      const isFever = combo >= 15;
+      if (isFever && heartHealth > 0) {
+        ctx.save();
+        // Golden pulsating vignette framing the screen
+        const vignetteGrad = ctx.createRadialGradient(cx, cy, w * 0.35, cx, cy, w * 0.72);
+        vignetteGrad.addColorStop(0, 'rgba(234, 179, 8, 0)');
+        vignetteGrad.addColorStop(1, `rgba(234, 179, 8, ${0.12 + Math.sin(Date.now() / 150) * 0.05})`);
+        ctx.fillStyle = vignetteGrad;
+        ctx.fillRect(0, 0, w, h);
+
+        // Rising golden cells/sparks around the heart
+        ctx.fillStyle = '#facc15';
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = '#facc15';
+        for (let i = 0; i < 12; i++) {
+          const seed = (i * 997 + Date.now() / 2) % 1000;
+          const progress = seed / 1000; // 0 to 1
+          const spAngle = (i * Math.PI) / 6 + Math.sin(Date.now() / 250 + i) * 0.15;
+          const spDist = displaySize * 1.1 + (progress * 80);
+          const sx = cx + Math.cos(spAngle) * spDist;
+          const sy = cy + Math.sin(spAngle) * spDist - (progress * 15); // float up slightly
+          const spSize = 1.5 + (1 - progress) * 2;
+          
+          ctx.globalAlpha = (1 - progress) * 0.8;
+          ctx.beginPath();
+          ctx.arc(sx, sy, spSize, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.restore();
+
+        // Fever status text banner
+        ctx.save();
+        ctx.shadowBlur = 15;
+        ctx.shadowColor = '#facc15';
+        ctx.fillStyle = '#facc15';
+        ctx.font = 'bold 9px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(`🔥 نَمطُ الفورة: مُضاعَف السرعة والدرجات! 🔥`, cx, cy - 85);
+        ctx.restore();
+      }
+
       drawHeart(ctx, cx, cy, displaySize, heartHealth);
 
       // RENDER THREAT NODES
@@ -555,6 +597,22 @@ export const HeartGameCanvas: React.FC<HeartGameCanvasProps> = ({
         // Calculate dynamic coordinate based on progress distance from center
         const nx = cx + Math.cos(node.angle) * node.distance;
         const ny = cy + Math.sin(node.angle) * node.distance;
+
+        // Elegant comet trailing nodes (25-year game development expert touch!)
+        ctx.save();
+        for (let t = 1; t <= 3; t++) {
+          const trailDistance = node.distance + (t * 14); // Trail goes backward (outward)
+          const tx = cx + Math.cos(node.angle) * trailDistance;
+          const ty = cy + Math.sin(node.angle) * trailDistance;
+          ctx.fillStyle = node.color;
+          ctx.globalAlpha = 0.35 / t;
+          ctx.shadowBlur = 4;
+          ctx.shadowColor = node.color;
+          ctx.beginPath();
+          ctx.arc(tx, ty, (node.radius * node.pulseScale) * (1 - t * 0.22), 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.restore();
 
         // Draw node approach trail line (laser trail pointing to heart)
         ctx.strokeStyle = `${node.color}33`; // 20% alpha

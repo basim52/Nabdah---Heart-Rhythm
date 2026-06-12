@@ -141,6 +141,13 @@ export default function App() {
   const [activeLevelTab, setActiveLevelTab] = useState<'CLASSIC' | 'MUTATED' | 'VASCULAR'>('CLASSIC');
   const [selectedLevelInfo, setSelectedLevelInfo] = useState<number | null>(null);
 
+  // Defibrillator Resuscitation Minigame states
+  const [isDefibrillatorActive, setIsDefibrillatorActive] = useState<boolean>(false);
+  const [defibrillatorCharge, setDefibrillatorCharge] = useState<number>(0);
+  const [defibrillatorSlider, setDefibrillatorSlider] = useState<number>(0);
+  const [defibrillatorUsed, setDefibrillatorUsed] = useState<boolean>(false);
+  const [defibrillatorTimeLeft, setDefibrillatorTimeLeft] = useState<number>(10);
+
   // Helper to calculate stage configurations (1 to 90) - Scales difficulty beautifully
   const getStageConfig = (lvl: number) => {
     // Advanced Vascular Campaign stages (61 to 90) & Mutated stages (31 to 60)
@@ -648,7 +655,7 @@ export default function App() {
 
   // Main 60FPS Game Tick loop (Handles particle physics, node positions, trail animations)
   useEffect(() => {
-    if (gameState !== 'PLAYING') {
+    if (gameState !== 'PLAYING' || isDefibrillatorActive) {
       if (activeLoopRef.current) {
         cancelAnimationFrame(activeLoopRef.current);
         activeLoopRef.current = null;
@@ -1165,7 +1172,7 @@ export default function App() {
         activeLoopRef.current = null;
       }
     };
-  }, [gameState]);
+  }, [gameState, isDefibrillatorActive]);
 
   // Spawns electrical disruptions (cyan), virus threats (gold), or clots (red) from visual edges
   const spawnThreatNode = (playerNum: 1 | 2 = 1, customData?: any) => {
@@ -1599,6 +1606,109 @@ export default function App() {
     }
   };
 
+  // Defibrillator Resuscitation Minigame loops (Timer and Slider animation)
+  useEffect(() => {
+    if (!isDefibrillatorActive) return;
+
+    // 1. Countdown ticking timer (10 seconds to flatline)
+    const countdown = setInterval(() => {
+      setDefibrillatorTimeLeft((prev) => {
+        if (prev <= 1) {
+          clearInterval(countdown);
+          // Fail Resuscitation!
+          setIsDefibrillatorActive(false);
+          audioSynthRef.current.stopFlatline();
+          handleGameOver(false);
+          return 0;
+        }
+        // Play critical alarm beep on each countdown tick
+        audioSynthRef.current.playAlarmBeep();
+        return prev - 1;
+      });
+    }, 1000);
+
+    // 2. High-speed slider loop for precision target
+    let activeFrame: number;
+    let currentSlider = 0;
+    let currentDir: 'RIGHT' | 'LEFT' = 'RIGHT';
+
+    const animateSlider = () => {
+      if (currentDir === 'RIGHT') {
+        currentSlider += 3.5; // sliding speed
+        if (currentSlider >= 100) {
+          currentSlider = 100;
+          currentDir = 'LEFT';
+        }
+      } else {
+        currentSlider -= 3.5;
+        if (currentSlider <= 0) {
+          currentSlider = 0;
+          currentDir = 'RIGHT';
+        }
+      }
+      setDefibrillatorSlider(currentSlider);
+      activeFrame = requestAnimationFrame(animateSlider);
+    };
+
+    activeFrame = requestAnimationFrame(animateSlider);
+
+    return () => {
+      clearInterval(countdown);
+      cancelAnimationFrame(activeFrame);
+    };
+  }, [isDefibrillatorActive]);
+
+  // Charge function called when player taps/clicks "Charge"
+  const handleDefibrillatorChargeClick = () => {
+    if (!isDefibrillatorActive) return;
+    setDefibrillatorCharge((prev) => {
+      const nextCharge = Math.min(100, prev + 12); // needs ~8 rapidly sequenced taps
+      audioSynthRef.current.playDefibrillatorChargeSound(nextCharge);
+      return nextCharge;
+    });
+  };
+
+  // Shock trigger function called when player taps "SHOCK"
+  const handleDefibrillatorShockClick = () => {
+    if (!isDefibrillatorActive) return;
+    if (defibrillatorCharge < 100) return; // Must be fully charged
+
+    // Precision window target is between 40% and 60% on the slider bar
+    const hitPosition = defibrillatorSlider;
+    const isSuccess = hitPosition >= 40 && hitPosition <= 60;
+
+    if (isSuccess) {
+      // resus succeeded!
+      audioSynthRef.current.playDefibrillatorShockSound();
+      audioSynthRef.current.stopFlatline();
+      
+      // Resuscitate player's heart
+      setHeartHealth(40);
+      setDefibrillatorUsed(true);
+      setIsDefibrillatorActive(false);
+      
+      // Add a nice floating resus success text and visual halo
+      spawnFloatingText(1, '❤️ تم الإنعاش بنجاح! +40%', 190, 150, '#10b981', true);
+      createExplosionDebris(1, 190, 190, '#10b981', 30);
+      
+      // Resume core game animation loop safely after resus!
+      isPlayingRef.current = true;
+      lastSpawnTimeRef.current = Date.now();
+    } else {
+      // Fail! Shock missed the golden EKG sync point!
+      audioSynthRef.current.playDefibrillatorFailSound();
+      
+      // Reset charge back so they have to recharge and adjust timing once more!
+      setDefibrillatorCharge(35);
+      
+      // Flash a screen red effect
+      setScreenShake(true);
+      setTimeout(() => setScreenShake(false), 240);
+      
+      spawnFloatingText(1, '❌ فشلت الصدمة: خارج النبض!', 190, 150, '#ef4444', true);
+    }
+  };
+
   // Triggers tap interaction (Player 1)
   const handleTapNode = (id: string, isPerfect: boolean, tapX: number, tapY: number) => {
     executeLocalTap(1, id, isPerfect, tapX, tapY);
@@ -1630,44 +1740,52 @@ export default function App() {
       if (isPerfect) {
         audioSynthRef.current.playPerfectSound();
         if (playerNum === 1) {
-          setScore((prev) => prev + 200);
+          const isP1Fever = combo >= 15;
+          const scoreAdd = isP1Fever ? 300 : 200;
+          setScore((prev) => prev + scoreAdd);
           setCombo((prev) => {
             const newCombo = prev + 1;
             if (newCombo > maxCombo) setMaxCombo(newCombo);
             return newCombo;
           });
           setAccuracy(prev => ({ total: prev.total + 1, perfect: prev.perfect + 1 }));
-          spawnFloatingText(1, '🚨 نبضة مثالية! +200', tapX, tapY, '#10b981', true);
+          spawnFloatingText(1, isP1Fever ? '🔥 نبضة حمى ذهبية! +300' : '🚨 نبضة مثالية! +200', tapX, tapY, isP1Fever ? '#facc15' : '#10b981', true);
         } else {
-          setScore2((prev) => prev + 200);
+          const isP2Fever = combo2 >= 15;
+          const scoreAdd = isP2Fever ? 300 : 200;
+          setScore2((prev) => prev + scoreAdd);
           setCombo2((prev) => {
             const newCombo = prev + 1;
             if (newCombo > maxCombo2) setMaxCombo2(newCombo);
             return newCombo;
           });
           setAccuracy2(prev => ({ total: prev.total + 1, perfect: prev.perfect + 1 }));
-          spawnFloatingText(2, '🚨 نبضة مثالية! +200', tapX, tapY, '#10b981', true);
+          spawnFloatingText(2, isP2Fever ? '🔥 نبضة حمى ذهبية! + 300' : '🚨 نبضة مثالية! +200', tapX, tapY, isP2Fever ? '#facc15' : '#10b981', true);
         }
       } else {
         audioSynthRef.current.playHitSound();
         if (playerNum === 1) {
-          setScore((prev) => prev + 100);
+          const isP1Fever = combo >= 15;
+          const scoreAdd = isP1Fever ? 150 : 100;
+          setScore((prev) => prev + scoreAdd);
           setCombo((prev) => {
             const newCombo = prev + 1;
             if (newCombo > maxCombo) setMaxCombo(newCombo);
             return newCombo;
           });
           setAccuracy(prev => ({ ...prev, total: prev.total + 1 }));
-          spawnFloatingText(1, '+100 نقرة', tapX, tapY, '#22d3ee', false);
+          spawnFloatingText(1, isP1Fever ? '⚡ نقرة فورة! +150' : '+100 نقرة', tapX, tapY, isP1Fever ? '#eab308' : '#22d3ee', false);
         } else {
-          setScore2((prev) => prev + 100);
+          const isP2Fever = combo2 >= 15;
+          const scoreAdd = isP2Fever ? 150 : 100;
+          setScore2((prev) => prev + scoreAdd);
           setCombo2((prev) => {
             const newCombo = prev + 1;
             if (newCombo > maxCombo2) setMaxCombo2(newCombo);
             return newCombo;
           });
           setAccuracy2(prev => ({ ...prev, total: prev.total + 1 }));
-          spawnFloatingText(2, '+100 نقرة', tapX, tapY, '#22d3ee', false);
+          spawnFloatingText(2, isP2Fever ? '⚡ نقرة فورة! +150' : '+100 نقرة', tapX, tapY, isP2Fever ? '#eab308' : '#22d3ee', false);
         }
       }
 
@@ -1794,7 +1912,15 @@ export default function App() {
         setHeartHealth((h) => {
           const nextH = Math.max(0, h - dmg);
           if (nextH <= 0) {
-            handleGameOver();
+            if (!isSplitScreenRef.current && !isOnlineCoop && !defibrillatorUsed && (gameMode === 'LEVELS' || gameMode === 'ENDLESS')) {
+              isPlayingRef.current = false;
+              setIsDefibrillatorActive(true);
+              setDefibrillatorCharge(0);
+              setDefibrillatorTimeLeft(10);
+              audioSynthRef.current.startFlatline();
+            } else {
+              handleGameOver();
+            }
           }
           return nextH;
         });
@@ -2335,6 +2461,9 @@ export default function App() {
     // Reset Stats
     setHeartHealth(100);
     setScore(0);
+    setDefibrillatorUsed(false);
+    setIsDefibrillatorActive(false);
+    setDefibrillatorCharge(0);
     setCombo(0);
     setMaxCombo(0);
     setCurrentBPM(72);
@@ -2777,7 +2906,10 @@ export default function App() {
                       {!isUnlocked ? (
                         <Lock className="w-3.5 h-3.5 opacity-60 mb-0.5 text-white/30" />
                       ) : isCompleted ? (
-                        <Check className="w-3.5 h-3.5 text-emerald-400 mb-0.5" />
+                        <div className="flex gap-0.5 items-center justify-center mb-0.5 animate-bounce">
+                          <Trophy className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
+                          <Check className="w-3 h-3 text-emerald-400 shrink-0" />
+                        </div>
                       ) : (
                         <span className="text-[8px] text-white/40 tracking-tight font-mono mb-0.5">هدف: {getStageConfig(lNum).targetScore}</span>
                       )}
@@ -2954,6 +3086,43 @@ export default function App() {
                 />
               </div>
 
+              {/* Medical Accolades Panel (25-year game development expert polish) */}
+              <div className="backdrop-blur-md bg-white/5 border border-white/10 rounded-2xl p-3.5 text-right flex flex-col gap-2">
+                <p className="text-[10px] uppercase font-bold tracking-widest text-amber-400 flex items-center gap-1.5 justify-end">
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>الأوسمة الطبية المكتسبة والجوائز:</span>
+                </p>
+                <div className="grid grid-cols-5 gap-1.5">
+                  {[
+                    { lvl: 2, title: "مُسعف متدرب", icon: "🩺", desc: "بدأ رحلة الإنعاش" },
+                    { lvl: 15, title: "قاهر الفيروسات", icon: "🦠", desc: "بلغ المرحلة 15" },
+                    { lvl: 30, title: "أخصائي القلوب", icon: "🫀", desc: "طهّر الأوعية الكلاسيكية" },
+                    { lvl: 60, title: "بروفيسور سيبراني", icon: "🧬", desc: "بلغ المرحلة 60" },
+                    { lvl: 90, title: "المنقذ الأسطوري", icon: "🏆", desc: "قهر صمام الإنسداد النهائي" }
+                  ].map((badge, bIdx) => {
+                    const isBadgeUnlocked = maxUnlockedLevel >= badge.lvl;
+                    return (
+                      <div 
+                        key={bIdx}
+                        className={`flex flex-col items-center justify-center py-2 px-0.5 rounded-xl border text-center transition-all cursor-help relative group h-[58px] ${
+                          isBadgeUnlocked 
+                            ? 'bg-amber-500/10 border-amber-500/30 text-amber-300 shadow-[0_0_8px_rgba(234,179,8,0.1)] scale-100' 
+                            : 'bg-black/35 border-white/5 text-white/30 opacity-60'
+                        }`}
+                      >
+                        <span className="text-xl mb-0.5 leading-none">{isBadgeUnlocked ? badge.icon : "🔒"}</span>
+                        <span className="text-[7.5px] font-black leading-tight w-full truncate">{badge.title}</span>
+                        {/* Custom tooltip on hover */}
+                        <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 bg-slate-900 border border-white/10 text-white rounded-lg p-2 text-[10px] hidden group-hover:block w-36 text-center shadow-xl z-20 pointer-events-none">
+                          <p className="font-extrabold text-amber-400">{badge.title}</p>
+                          <p className="text-white/70 text-[9px] mt-0.5">{badge.desc}</p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
               {/* Action Start Buttons */}
               <div className="flex flex-col gap-2 mt-2">
                 <button
@@ -2962,7 +3131,7 @@ export default function App() {
                   className="w-full bg-gradient-to-r from-emerald-600 to-emerald-800 hover:from-emerald-500 hover:to-emerald-700 text-white font-bold py-3 px-6 rounded-xl flex items-center justify-center gap-2 outline-none border border-white/15 shadow-[0_0_15px_rgba(16,185,129,0.3)] active:scale-[0.98] transition-all cursor-pointer text-sm font-display font-medium"
                 >
                   <Trophy className="w-4 h-4 text-white fill-current animate-pulse" />
-                  لعب طور المراحل الـ 30 (تطهير الأوعية الدموية 🏆)
+                  لعب طور المراحل الـ 90 (تطهير القلب والأوعية الدموية 🏆)
                 </button>
 
                 <button
@@ -3098,7 +3267,118 @@ export default function App() {
 
         {/* ACTIVE GAMEPLAY MODULE SCREEN */}
         {gameState === 'PLAYING' && (
-          <div id="playing-module" className="flex flex-col gap-4 animate-fade-in font-sans">
+          <div id="playing-module" className="flex flex-col gap-4 animate-fade-in font-sans relative">
+            
+            {isDefibrillatorActive && (
+              <div id="defibrillator-overlay" className="absolute inset-0 bg-[#0c0202]/98 z-50 rounded-3xl p-5 flex flex-col justify-between overflow-hidden border border-red-500/30 animate-fade-in shadow-[0_0_50px_rgba(239,68,68,0.25)] min-h-[500px]">
+                
+                {/* Header flashing alert */}
+                <div className="text-center space-y-2 mt-2">
+                  <div className="inline-flex items-center gap-1.5 bg-red-550/15 border border-red-500/30 text-red-500 text-[10px] font-bold py-1 px-3.5 rounded-full animate-pulse tracking-widest uppercase">
+                    <span className="w-2 h-2 rounded-full bg-red-650 animate-ping" />
+                    توقف مفاجئ لعضلة القلب • CARDIAC ARREST
+                  </div>
+                  <h2 className="text-xl font-black text-white tracking-tight leading-7">
+                    🚨 وحدة الطوارئ والإنعاش الصدمي 🚨
+                  </h2>
+                  <p className="text-xs text-white/50 px-4 font-sans">
+                    مستوى حيوية الدماغ والقلب ينخفض بسرعة! اشحن المكثف وقدم صدمة متزامنة مع نبضات EKG لمنع الوفاة السريرية.
+                  </p>
+                </div>
+
+                {/* EKG / Flatline Monitor Section */}
+                <div className="w-full bg-black/60 rounded-2xl p-4 border border-white/5 space-y-3 relative overflow-hidden shadow-inner flex flex-col items-center">
+                  <div className="text-center font-sans space-y-1">
+                    <div className="text-[10px] text-white/40 uppercase tracking-widest">إشارة النبض الأساسية (ECG SIGNALS)</div>
+                    <div className="text-xl font-black text-red-500 animate-pulse font-sans flex items-center justify-center gap-1">
+                      <span className="w-2.5 h-2.5 rounded-full bg-red-600 animate-ping" />
+                      00 BPM
+                    </div>
+                  </div>
+                  
+                  {/* Flatline flat neon line simulator */}
+                  <div className="w-full h-10 flex items-center justify-center relative">
+                    <div className="absolute inset-x-0 h-[2px] bg-red-600/20" />
+                    <div className="absolute inset-x-0 h-[2px] bg-red-500 animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.8)]" />
+                    <span className="absolute right-4 text-[9px] text-red-400 font-sans">تسطح كهربائي (Asystole)</span>
+                  </div>
+
+                  {/* Time remaining counter */}
+                  <div className="flex items-center gap-2 bg-red-500/10 border border-red-500/20 px-4 py-1.5 rounded-xl">
+                    <span className="text-[10px] text-red-400 font-sans font-bold">الوقت المتبقي للإنعاش:</span>
+                    <span className="text-base font-black text-red-400 font-sans animate-bounce">{defibrillatorTimeLeft}s</span>
+                  </div>
+                </div>
+
+                {/* Tap charging system */}
+                <div className="space-y-4 my-2 text-center">
+                  <div className="space-y-1.5">
+                    <div className="flex justify-between items-center text-[10px] px-1 font-sans">
+                      <span className="text-amber-400 font-bold">شحن مكثف الطاقة (CAPACITOR CHARGE)</span>
+                      <span className="text-amber-400 font-bold">{defibrillatorCharge}%</span>
+                    </div>
+                    <div className="w-full h-4 bg-black/50 border border-white/5 rounded-full p-0.5 relative overflow-hidden">
+                      <div 
+                        className="h-full rounded-full transition-all duration-150 bg-gradient-to-r from-amber-550 via-orange-500 to-yellow-400 shadow-[0_0_15px_rgba(245,158,11,0.5)]"
+                        style={{ width: `${defibrillatorCharge}%` }}
+                      />
+                      {defibrillatorCharge === 100 && (
+                        <div className="absolute inset-0 flex items-center justify-center text-[10px] text-black font-black uppercase tracking-widest animate-pulse">
+                          ⚡ جاهز تماماً للصعق! CHARGED ⚡
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Tapping trigger button to charge or shock */}
+                  {defibrillatorCharge < 100 ? (
+                    <button
+                      onClick={handleDefibrillatorChargeClick}
+                      className="w-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-black font-black py-4 px-6 rounded-2xl flex flex-col items-center justify-center gap-1 outline-none border border-amber-400/30 active:scale-95 transition-all text-sm font-sans shadow-[0_0_20px_rgba(245,158,11,0.3)] animate-pulse cursor-pointer"
+                    >
+                      <span className="text-sm font-bold flex items-center gap-1">⚡ اضغط بشكل متكرر وسريع للشحن! ⚡</span>
+                      <span className="text-[10px] opacity-75 font-normal">[ TAP / CLICK REPEATEDLY TO CHARGE ]</span>
+                    </button>
+                  ) : (
+                    <div className="space-y-3.5 bg-amber-500/5 p-4 rounded-2xl border border-amber-500/20">
+                      <div className="space-y-1">
+                        <div className="flex justify-between text-[9px] text-amber-400/70 mb-1 font-sans px-1">
+                          <span>إشارة المزامنة التناغمية</span>
+                          <span className="font-bold">المعدل الحرج: 40% - 60%</span>
+                        </div>
+                        {/* Sliding sync bar game */}
+                        <div className="w-full h-6 bg-black/50 rounded-lg p-0.5 relative overflow-hidden border border-white/10">
+                          {/* Sweet target zone in center (40% to 60%) */}
+                          <div className="absolute inset-y-0 left-[40%] right-[40%] bg-gradient-to-r from-emerald-500 to-green-400 opacity-30 border-x border-emerald-400/50 animate-pulse" />
+                          <div className="absolute inset-y-0 left-[45%] right-[45%] bg-emerald-450 opacity-20 flex items-center justify-center text-[8px] text-emerald-400 font-bold">
+                            SYNC
+                          </div>
+
+                          {/* Moving indicator */}
+                          <div 
+                            className="absolute top-0 bottom-0 w-1.5 bg-yellow-400 shadow-[0_0_12px_#facc15] transition-all duration-10 cursor-default"
+                            style={{ left: `${defibrillatorSlider}%` }}
+                          />
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={handleDefibrillatorShockClick}
+                        className="w-full bg-gradient-to-r from-emerald-500 to-green-500 hover:from-emerald-400 hover:to-green-400 text-black font-black py-4 px-6 rounded-2xl flex flex-col items-center justify-center gap-0.5 outline-none border border-emerald-400/30 active:scale-95 transition-all text-sm font-sans shadow-[0_0_25px_rgba(16,185,129,0.4)] animate-pulse cursor-pointer"
+                      >
+                        <span className="text-base font-black flex items-center gap-1.5">⚡ صعق الآن! ⚡ [ SHOCK NOW ]</span>
+                        <span className="text-[9px] opacity-80 font-normal">[ TAP WHEN TARGET IS IN HIGHLIGHTED GREEN ZONE ]</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Footer warning */}
+                <div className="text-center text-[9px] text-white/30 font-sans py-1 border-t border-white/5">
+                  NABDAH EMERGENCY SYSTEM V1.0 • صدمات تزامنية إيقاعية
+                </div>
+              </div>
+            )}
             
 
             {/* Real-time Electrocardiogram (ECG) monitor line */}

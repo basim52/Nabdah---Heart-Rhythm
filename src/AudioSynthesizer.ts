@@ -679,4 +679,129 @@ export class AudioSynthesizer {
       console.warn("Summon sound fail", e);
     }
   }
+
+  /**
+   * Synthesizes charging whoosh sound of defibrillator pads capacitor
+   */
+  public playDefibrillatorChargeSound(chargeProgress: number): void {
+    if (!this.ctx || !this.masterGain) return;
+    if (this.ctx.state === 'suspended') return;
+
+    const now = this.ctx.currentTime;
+    try {
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+
+      osc.type = 'sine';
+      // Pitch rises as charging progress gets closer to 100
+      const startFreq = 220 + (chargeProgress * 4.5); // 220Hz up to 670Hz
+      osc.frequency.setValueAtTime(startFreq, now);
+      osc.frequency.exponentialRampToValueAtTime(startFreq + 50, now + 0.15);
+
+      gain.gain.setValueAtTime(0, now);
+      gain.gain.linearRampToValueAtTime(0.2, now + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+
+      osc.connect(gain);
+      gain.connect(this.masterGain);
+
+      osc.start(now);
+      osc.stop(now + 0.16);
+    } catch (e) {
+      console.warn("Charge sound fail", e);
+    }
+  }
+
+  /**
+   * Synthesizes powerful lightning thunder shock discharge for defibrillator pad resus
+   */
+  public playDefibrillatorShockSound(): void {
+    if (!this.ctx || !this.masterGain) return;
+    if (this.ctx.state === 'suspended') return;
+
+    const now = this.ctx.currentTime;
+    try {
+      // 1. High frequency white/pink noise burst (electrical spark zap)
+      const oscZap = this.ctx.createOscillator();
+      const oscBass = this.ctx.createOscillator();
+      const gainZap = this.ctx.createGain();
+      const gainBass = this.ctx.createGain();
+
+      oscZap.type = 'sawtooth';
+      oscZap.frequency.setValueAtTime(1200, now);
+      oscZap.frequency.exponentialRampToValueAtTime(150, now + 0.4);
+
+      // Lowpass filter to shape the electronic blast
+      const filter = this.ctx.createBiquadFilter();
+      filter.type = 'bandpass';
+      filter.frequency.setValueAtTime(600, now);
+      filter.Q.setValueAtTime(3, now);
+
+      gainZap.gain.setValueAtTime(0, now);
+      gainZap.gain.linearRampToValueAtTime(0.6, now + 0.02);
+      gainZap.gain.exponentialRampToValueAtTime(0.001, now + 0.55);
+
+      oscZap.connect(filter);
+      filter.connect(gainZap);
+      gainZap.connect(this.masterGain);
+
+      // 2. Heavy bass thump for resonance
+      oscBass.type = 'triangle';
+      oscBass.frequency.setValueAtTime(90, now);
+      oscBass.frequency.exponentialRampToValueAtTime(20, now + 0.35);
+
+      gainBass.gain.setValueAtTime(0, now);
+      gainBass.gain.linearRampToValueAtTime(0.8, now + 0.03);
+      gainBass.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
+
+      oscBass.connect(gainBass);
+      gainBass.connect(this.masterGain);
+
+      oscZap.start(now);
+      oscBass.start(now);
+
+      oscZap.stop(now + 0.6);
+      oscBass.stop(now + 0.5);
+    } catch (e) {
+      console.warn("Shock sound fail", e);
+    }
+  }
+
+  /**
+   * Synthesizes failure/buzz alert sound (medical warning fail)
+   */
+  public playDefibrillatorFailSound(): void {
+    if (!this.ctx || !this.masterGain) return;
+    if (this.ctx.state === 'suspended') return;
+
+    const now = this.ctx.currentTime;
+    try {
+      const osc1 = this.ctx.createOscillator();
+      const osc2 = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+
+      osc1.type = 'sawtooth';
+      osc2.type = 'sawtooth';
+
+      // Harsh dissonant cluster (e.g. 110Hz and 114Hz)
+      osc1.frequency.setValueAtTime(110, now);
+      osc2.frequency.setValueAtTime(114, now);
+
+      gain.gain.setValueAtTime(0, now);
+      gain.gain.linearRampToValueAtTime(0.4, now + 0.05);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
+
+      osc1.connect(gain);
+      osc2.connect(gain);
+      gain.connect(this.masterGain);
+
+      osc1.start(now);
+      osc2.start(now);
+
+      osc1.stop(now + 0.45);
+      osc2.stop(now + 0.45);
+    } catch (e) {
+      console.warn("Fail sound fail", e);
+    }
+  }
 }
