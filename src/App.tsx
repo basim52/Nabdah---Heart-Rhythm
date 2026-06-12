@@ -138,8 +138,30 @@ export default function App() {
   const [maxUnlockedLevel, setMaxUnlockedLevel] = useState<number>(1);
   const [levelCompleted, setLevelCompleted] = useState<boolean>(false);
   const [showLevelsView, setShowLevelsView] = useState<boolean>(false);
-  const [activeLevelTab, setActiveLevelTab] = useState<'CLASSIC' | 'MUTATED' | 'VASCULAR'>('CLASSIC');
+  const [activeLevelTab, setActiveLevelTab] = useState<'CLASSIC' | 'MUTATED' | 'VASCULAR' | 'CARDIAC'>('CLASSIC');
   const [selectedLevelInfo, setSelectedLevelInfo] = useState<number | null>(null);
+
+  // Arabic Heart Safety Tips (≤ 4 words) - For displaying non-disruptive medical tips between levels
+  const HEART_TIPS = [
+    "مارس الرياضة يومياً 🏃‍♂️",
+    "قلل الملح والسكريات 🧂",
+    "تجنب التدخين تماماً 🚭",
+    "تناول طعاماً صحياً 🍏",
+    "ابتعد عن التوتر 🧘‍♂️",
+    "احرص على النوم 😴",
+    "اشرب الماء بانتظام 💧",
+    "راقب ضغط الدم 🩺",
+    "حافظ على وزنك ⚖️",
+    "قلل الوجبات السريعة 🍔",
+    "تناول خضاراً وفواكه 🥦",
+    "افحص قلبك دورياً ❤️"
+  ];
+  const [currentHeartTip, setCurrentHeartTip] = useState<string>("مارس الرياضة يومياً 🏃‍♂️");
+
+  const rotateHeartTip = () => {
+    const idx = Math.floor(Math.random() * HEART_TIPS.length);
+    setCurrentHeartTip(HEART_TIPS[idx]);
+  };
 
   // Defibrillator Resuscitation Minigame states
   const [isDefibrillatorActive, setIsDefibrillatorActive] = useState<boolean>(false);
@@ -150,7 +172,7 @@ export default function App() {
 
   // Helper to calculate stage configurations (1 to 90) - Scales difficulty beautifully
   const getStageConfig = (lvl: number) => {
-    // Advanced Vascular Campaign stages (61 to 90) & Mutated stages (31 to 60)
+    // Advanced Vascular Campaign stages (61 to 90) & Mutated stages (31 to 60) & Cardiac Surgery (91 to 100)
     let targetScore = lvl * 100 + 50; 
     if (lvl === 30) {
       targetScore = 3500; // Epic boss score goal
@@ -158,6 +180,10 @@ export default function App() {
       targetScore = 6000; // Ultimate giant megaboss boss score goal
     } else if (lvl === 90) {
       targetScore = 9000; // Ultimate coronary embolus boss score goal
+    } else if (lvl === 100) {
+      targetScore = 12000; // Ultimate Grand Open Heart Surgery Boss score goal
+    } else if (lvl >= 91) {
+      targetScore = 9200 + (lvl - 90) * 250;
     } else if (lvl >= 61) {
       targetScore = 6200 + (lvl - 60) * 140;
     } else if (lvl >= 31) {
@@ -167,16 +193,32 @@ export default function App() {
     
     // Shorter spawn intervals as level increases (clamped sensibly)
     const baseSpawnInterval = Math.max(
-      lvl >= 80 ? 270 : lvl >= 61 ? 310 : lvl >= 50 ? 320 : lvl >= 31 ? 380 : lvl === 30 ? 460 : 440,
+      lvl >= 91 ? 250 : lvl >= 80 ? 270 : lvl >= 61 ? 310 : lvl >= 50 ? 320 : lvl >= 31 ? 380 : lvl === 30 ? 460 : 440,
       2400 - (lvl * 64)
     ); 
     
     // Higher speed base factor as difficulty expands
-    const baseSpeed = lvl >= 61 ? 0.8 + (lvl * 0.046) : 0.8 + (lvl * 0.057); 
+    const baseSpeed = lvl >= 91 ? 0.9 + (lvl * 0.05) : lvl >= 61 ? 0.8 + (lvl * 0.046) : 0.8 + (lvl * 0.057); 
     return { targetScore, baseSpawnInterval, baseSpeed };
   };
 
   const getStageDescription = (lvl: number) => {
+    if (lvl === 100) {
+      return {
+        title: "جراحة القلب المفتوح الكبرى: الإنعاش الأسطوري الأخير (المستوى رقم 100!) 🫀🏆🏥",
+        threats: "زعيم الإنسداد صِمام صِمام الهائل CORONARY_EMBOLUS_BOSS (يتطلب 30 ضربة!) + عاصفة جائحة من كافة اللويحات والخثرات!",
+        speed: "سرعة فوق طاقة الاستيعاب ⚡🩺💥",
+        desc: "لقد بلغت المرحلة 100 النهائية! عملية قلب مفتوح معقدة تحت رعاية المسعف الأسطوري. الزعيم مسدود عند الصمام الثلاثي والنبض على المحك التام، يحتاج لـ 30 ضربة إيقاعية لتفتيته وإنعاش الحياة دورياً! أثبت جدارتك التاريخية والتقط الإيقاع الأخر لوقف التوقف ونيل المجد الطبي الكامل."
+      };
+    }
+    if (lvl >= 91) {
+      return {
+        title: `غرفة العمليات الجراحية: إنقاذ العقدة الأذينية - مستوى ${lvl} 🧪`,
+        threats: "مزيج عاصف من الآفات: لويحات تصلب صفراء (4 ضربات) + خثرات وريدية زرقاء سريعة + جلطات شريانية ورمية!",
+        speed: "نبض حاد وخاطف 🧬🏥🚨",
+        desc: "تتعرض العقدة الجيبية الأذينية لتشويش شامل في حملة القلب المفتوح المتقدمة! يجب تطهير غرف المريض وإزالة الجلطات المتسارعة لتأمين ثبات النبض وتدفق الدورة الدموية الكبرى."
+      };
+    }
     if (lvl === 90) {
       return {
         title: "انسداد الشريان التاجي الأعظم (المستوى النهائي النهائي 90)! 🫀🚨",
@@ -334,7 +376,7 @@ export default function App() {
     const rawLvl = localStorage.getItem('nabdah_max_unlocked_level_v1');
     if (rawLvl) {
       const parsed = parseInt(rawLvl, 10);
-      if (!isNaN(parsed) && parsed >= 1 && parsed <= 90) {
+      if (!isNaN(parsed) && parsed >= 1 && parsed <= 100) {
         setMaxUnlockedLevel(parsed);
       }
     }
@@ -397,7 +439,7 @@ export default function App() {
             }
 
             const mergedSet = new Set([...dbCompleted, ...localCompleted]);
-            const finalCompleted = Array.from(mergedSet).filter(lvl => !isNaN(lvl) && lvl >= 1 && lvl <= 90);
+            const finalCompleted = Array.from(mergedSet).filter(lvl => !isNaN(lvl) && lvl >= 1 && lvl <= 100);
 
             // Update local storage
             localStorage.setItem('nabdah_max_unlocked_level_v1', String(finalMax));
@@ -677,6 +719,7 @@ export default function App() {
       if (gameMode === 'LEVELS' && !levelCompleted && scoreRef.current >= getStageConfig(currentLevel).targetScore) {
         setLevelCompleted(true);
         setGameState('LEVEL_COMPLETE');
+        rotateHeartTip();
         isPlayingRef.current = false;
         audioSynthRef.current.stopAmbientSoundtrack();
         audioSynthRef.current.playPerfectSound();
@@ -684,7 +727,7 @@ export default function App() {
         // Save level status
         const nextLvl = currentLevel + 1;
         let updatedMaxLvl = maxUnlockedLevel;
-        if (nextLvl <= 90 && nextLvl > maxUnlockedLevel) {
+        if (nextLvl <= 100 && nextLvl > maxUnlockedLevel) {
           updatedMaxLvl = nextLvl;
           setMaxUnlockedLevel(nextLvl);
           localStorage.setItem('nabdah_max_unlocked_level_v1', String(nextLvl));
@@ -1193,7 +1236,86 @@ export default function App() {
       
       if (gameMode === 'LEVELS') {
         const stage = currentLevel;
-        if (stage === 90) {
+        if (stage === 100) {
+          // Ultimate Coronary Embolus Grand Boss (Level 100!)
+          if (roll < 0.15) {
+            type = NodeType.CORONARY_EMBOLUS_BOSS;
+            color = '#e11d48'; // Bright crimson-rose
+            initialHealth = 30; // 30 epic hits!
+            speed = 0.25;
+            radius = 35;
+          } else if (roll >= 0.15 && roll < 0.35) {
+            type = NodeType.ARTERIAL_CLOT;
+            color = '#dc2626';
+            initialHealth = 3;
+            speed = 1.1;
+            radius = 16;
+          } else if (roll >= 0.35 && roll < 0.55) {
+            type = NodeType.VEIN_THROMBUS;
+            color = '#2563eb';
+            initialHealth = 2;
+            speed = 1.8;
+            radius = 13;
+          } else if (roll >= 0.55 && roll < 0.75) {
+            type = NodeType.ATHEROMA_PLAQUE;
+            color = '#facc15';
+            initialHealth = 4;
+            speed = 0.7;
+            radius = 18;
+          } else if (roll >= 0.75 && roll < 0.88) {
+            type = NodeType.ADRENALINE;
+            color = '#10b981';
+            speed = 1.1;
+            radius = 11;
+            initialHealth = 1;
+          } else {
+            type = NodeType.PACEMAKER;
+            color = '#38bdf8';
+            speed = 1.0;
+            radius = 12;
+            initialHealth = 1;
+          }
+        } else if (stage >= 91) {
+          // Campaign Levels 91-99
+          if (roll < 0.10) {
+            // Mini boss
+            type = NodeType.CORONARY_EMBOLUS_BOSS;
+            color = '#f43f5e';
+            initialHealth = 12; // Mini-boss version (12 hits)
+            speed = 0.35;
+            radius = 28;
+          } else if (roll >= 0.10 && roll < 0.32) {
+            type = NodeType.ATHEROMA_PLAQUE;
+            color = '#facc15';
+            initialHealth = 4;
+            speed = 0.65;
+            radius = 18;
+          } else if (roll >= 0.32 && roll < 0.55) {
+            type = NodeType.VEIN_THROMBUS;
+            color = '#2563eb';
+            initialHealth = 2;
+            speed = 1.75;
+            radius = 13;
+          } else if (roll >= 0.55 && roll < 0.78) {
+            type = NodeType.ARTERIAL_CLOT;
+            color = '#dc2626';
+            initialHealth = 3;
+            speed = 1.05;
+            radius = 16;
+          } else if (roll >= 0.78 && roll < 0.88) {
+            type = NodeType.ADRENALINE;
+            color = '#10b981';
+            speed = 1.1;
+            radius = 11;
+            initialHealth = 1;
+          } else {
+            type = NodeType.PACEMAKER;
+            color = '#38bdf8';
+            speed = 1.05;
+            radius = 12;
+            initialHealth = 1;
+          }
+        } else if (stage === 90) {
           // Ultimate Coronary Embolus Final boss (Level 90)
           if (roll < 0.12) {
             type = NodeType.CORONARY_EMBOLUS_BOSS;
@@ -1964,6 +2086,7 @@ export default function App() {
 
   const handleGameOver = (isTimeOut: boolean = false) => {
     setGameState('GAMEOVER');
+    rotateHeartTip();
     isPlayingRef.current = false;
     setIsTimeOutEnd(isTimeOut);
     
@@ -2815,11 +2938,11 @@ export default function App() {
 
         {gameState === 'START' && (
           showLevelsView ? (
-            <div id="levels-selection-screen" className="flex flex-col gap-4 py-3 animate-fade-in text-center font-sans">
+            <div id="levels-selection-screen" className="flex flex-col gap-4 py-3 animate-fade-in text-center font-sans w-full max-w-lg mx-auto">
               {/* Back button */}
               <div className="flex justify-between items-center mb-1">
-                <h3 className="text-lg font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-red-400 to-amber-400 font-display">
-                  {activeLevelTab === 'CLASSIC' ? "الأوعية الكلاسيكية: المراحل 1 - 30 🏆" : activeLevelTab === 'MUTATED' ? "الطفرة السيبرانية: المراحل 31 - 60 🧪" : "حملة الأوردة والشرايين: المراحل 61 - 90 🚨"}
+                <h3 className="text-base sm:text-lg font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-red-400 to-amber-400 font-display">
+                  {activeLevelTab === 'CLASSIC' ? "الأوعية الكلاسيكية: المراحل 1 - 30 🏆" : activeLevelTab === 'MUTATED' ? "الطفرة السيبرانية: المراحل 31 - 60 🧪" : activeLevelTab === 'VASCULAR' ? "حملة الأوردة والشرايين: المراحل 61 - 90 🚨" : "جراحة القلب المفتوح: المراحل 91 - 100 🏥"}
                 </h3>
                 <button
                   onClick={() => setShowLevelsView(false)}
@@ -2831,13 +2954,13 @@ export default function App() {
               </div>
 
               {/* Tabs selector */}
-              <div className="flex gap-1.5 p-1 bg-black/40 rounded-2xl border border-white/5">
+              <div className="flex gap-1 p-1 bg-black/40 rounded-2xl border border-white/5 overflow-x-auto shrink-0">
                 <button
                   type="button"
                   onClick={() => setActiveLevelTab('CLASSIC')}
-                  className={`flex-1 py-2 text-[10px] sm:text-xs font-bold rounded-xl transition-all cursor-pointer ${
+                  className={`flex-1 py-1.5 px-2 text-[10px] font-bold rounded-xl transition-all cursor-pointer whitespace-nowrap ${
                     activeLevelTab === 'CLASSIC'
-                      ? 'bg-gradient-to-r from-red-500/20 to-red-600/20 text-red-400 border border-red-500/30 shadow-[0_0_12px_rgba(239,68,68,0.15)]'
+                      ? 'bg-gradient-to-r from-red-500/20 to-red-600/20 text-red-400 border border-red-500/30'
                       : 'text-white/60 hover:text-white hover:bg-white/5 border border-transparent'
                   }`}
                 >
@@ -2846,9 +2969,9 @@ export default function App() {
                 <button
                   type="button"
                   onClick={() => setActiveLevelTab('MUTATED')}
-                  className={`flex-1 py-2 text-[10px] sm:text-xs font-bold rounded-xl transition-all cursor-pointer ${
+                  className={`flex-1 py-1.5 px-2 text-[10px] font-bold rounded-xl transition-all cursor-pointer whitespace-nowrap ${
                     activeLevelTab === 'MUTATED'
-                      ? 'bg-gradient-to-r from-cyan-500/20 to-cyan-600/20 text-cyan-400 border border-cyan-500/30 shadow-[0_0_12px_rgba(6,182,212,0.15)]'
+                      ? 'bg-gradient-to-r from-cyan-500/20 to-cyan-600/20 text-cyan-400 border border-cyan-500/30'
                       : 'text-white/60 hover:text-white hover:bg-white/5 border border-transparent'
                   }`}
                 >
@@ -2857,13 +2980,24 @@ export default function App() {
                 <button
                   type="button"
                   onClick={() => setActiveLevelTab('VASCULAR')}
-                  className={`flex-1 py-2 text-[10px] sm:text-xs font-bold rounded-xl transition-all cursor-pointer ${
+                  className={`flex-1 py-1.5 px-2 text-[10px] font-bold rounded-xl transition-all cursor-pointer whitespace-nowrap ${
                     activeLevelTab === 'VASCULAR'
-                      ? 'bg-gradient-to-r from-rose-500/20 to-rose-600/20 text-rose-400 border border-rose-500/30 shadow-[0_0_12px_rgba(244,63,94,0.15)]'
+                      ? 'bg-gradient-to-r from-rose-500/20 to-rose-600/20 text-rose-450 border border-rose-500/30'
                       : 'text-white/60 hover:text-white hover:bg-white/5 border border-transparent'
                   }`}
                 >
                   الأوعية (61-90)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveLevelTab('CARDIAC')}
+                  className={`flex-1 py-1.5 px-2 text-[10px] font-bold rounded-xl transition-all cursor-pointer whitespace-nowrap ${
+                    activeLevelTab === 'CARDIAC'
+                      ? 'bg-gradient-to-r from-emerald-500/20 to-emerald-600/20 text-emerald-400 border border-emerald-500/30 shadow-[0_0_12px_rgba(16,185,129,0.15)]'
+                      : 'text-white/60 hover:text-white hover:bg-white/5 border border-transparent'
+                  }`}
+                >
+                  القلب المفتوح (91-100)
                 </button>
               </div>
 
@@ -2872,14 +3006,22 @@ export default function App() {
                   ? "طهر صمامات وعضلات القلب بالتدريج وتجاوز 30 مرحلة من الخطورة والآفات الجرثومية! تزداد وتيرة النبض والعدوانية مع تقدمك."
                   : activeLevelTab === 'MUTATED'
                     ? "⚠️ تحذير الطفرة السيبرانية: 30 مرحلة جديدة تختلف عن ال30 الأولى تماماً ببيئة لعب زرقاء مجهرية، جراثيم إلكترونية ذكية، وموسيقى طوارئ تركيبية مختلفة!"
-                    : "🔴🔵 حملة المسعف للأوعية والشرايين: 30 مرحلة فائقة الصعوبة والتشويق! جلطات شريانية تتضخم، وخثرات وريدية متعرجة خاطفة لتطوي القنوات، ولويحات تصلب صفراء بـ 4 ضربات، وزعيم الانسداد الأعظم بقوة 20 ضربة!"
+                    : activeLevelTab === 'VASCULAR'
+                      ? "🔴🔵 حملة المسعف للأوعية والشرايين: 30 مرحلة فائقة الصعوبة والتشويق! جلطات شريانية تتضخم، وخثرات وريدية متعرجة خاطفة لتطوي القنوات، ولويحات تصلب صفراء بـ 4 ضربات، وزعيم الانسداد الأعظم بقوة 20 ضربة!"
+                      : "🏥 جراحة القلب المفتوح الكبرى: 10 مراحل حاسمة نهائية لاستعادة نشاط العقدة الجيبية الأذينية! جلطات مستشرية، ومواجهة زعيم الصمام الأخير بصحة 30 ضربة بتركيز حديدي!"
                 }
               </p>
 
               {/* levels list */}
               <div className="grid grid-cols-5 gap-2 max-h-[280px] overflow-y-auto pr-1">
-                {Array.from({ length: 30 }).map((_, i) => {
-                  const lNum = activeLevelTab === 'CLASSIC' ? (i + 1) : activeLevelTab === 'MUTATED' ? (i + 31) : (i + 61);
+                {Array.from({ length: activeLevelTab === 'CARDIAC' ? 10 : 30 }).map((_, i) => {
+                  const lNum = activeLevelTab === 'CLASSIC' 
+                    ? (i + 1) 
+                    : activeLevelTab === 'MUTATED' 
+                      ? (i + 31) 
+                      : activeLevelTab === 'VASCULAR' 
+                        ? (i + 61) 
+                        : (i + 91);
                   const isUnlocked = lNum <= maxUnlockedLevel;
                   const isCompleted = lNum < maxUnlockedLevel || JSON.parse(localStorage.getItem('nabdah_completed_levels_v1') || '[]').includes(lNum);
 
@@ -2898,8 +3040,10 @@ export default function App() {
                             : activeLevelTab === 'MUTATED'
                               ? 'bg-cyan-500/5 border-cyan-500/20 text-cyan-300 hover:border-cyan-400 hover:scale-[1.05]'
                               : activeLevelTab === 'VASCULAR'
-                                ? 'bg-rose-500/5 border-rose-500/20 text-rose-350 hover:border-rose-400 hover:scale-[1.05]'
-                                : 'bg-white/5 border-white/10 text-white hover:border-red-500 hover:scale-[1.05]'
+                                ? 'bg-rose-500/5 border-rose-500/20 text-rose-400 hover:border-rose-450 hover:scale-[1.05]'
+                                : activeLevelTab === 'CARDIAC'
+                                  ? 'bg-emerald-500/5 border-emerald-500/20 text-emerald-350 hover:border-emerald-400 hover:scale-[1.05]'
+                                  : 'bg-white/5 border-white/10 text-white hover:border-red-500 hover:scale-[1.05]'
                       }`}
                     >
                       {/* Status Check / Lock */}
@@ -3649,6 +3793,12 @@ export default function App() {
         {gameState === 'GAMEOVER' && (
           <div id="gameover-container" className="flex flex-col gap-4 py-2 animate-fade-in text-center font-sans">
             
+            {/* Heart Safety Tip Badge */}
+            <div className="w-full bg-red-500/10 border border-red-500/20 px-4 py-2.5 rounded-2xl flex items-center justify-center gap-2 text-center animate-fade-in shadow-[0_0_15px_rgba(220,38,38,0.05)]">
+              <span className="text-red-400 font-bold text-xs font-sans">💡 نصيحة لسلامة قلبك:</span>
+              <span className="text-white font-bold text-xs font-sans">{currentHeartTip}</span>
+            </div>
+            
             {splitScreenWinner ? (
               /* DUAL PLAYER RESULTS PANEL */
               <div className="p-5 backdrop-blur-md bg-white/5 border border-purple-500/30 rounded-3xl flex flex-col items-center gap-3.5 my-2 shadow-[0_0_35px_rgba(139,92,246,0.25)] animate-fade-in text-right">
@@ -3797,6 +3947,12 @@ export default function App() {
               isLowHealth={false}
               isFlatline={false}
             />
+
+            {/* Heart Safety Tip Badge */}
+            <div className="w-full bg-emerald-500/10 border border-emerald-500/20 px-4 py-2.5 rounded-2xl flex items-center justify-center gap-2 text-center animate-fade-in shadow-[0_0_15px_rgba(16,185,129,0.05)]">
+              <span className="text-emerald-400 font-bold text-xs font-sans">💡 نصيحة لسلامة قلبك:</span>
+              <span className="text-white font-bold text-xs font-sans">{currentHeartTip}</span>
+            </div>
 
             {/* Victory card */}
             <div className="p-5 backdrop-blur-md bg-emerald-500/10 border border-emerald-500/30 rounded-3xl flex flex-col items-center gap-3.5 shadow-[0_0_35px_rgba(16,185,129,0.25)] animate-fade-in text-center">
