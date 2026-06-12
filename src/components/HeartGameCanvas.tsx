@@ -68,6 +68,10 @@ export const HeartGameCanvas: React.FC<HeartGameCanvasProps> = ({
     pulseOffset: number;
   }
   const veinParticlesRef = useRef<VeinParticle[]>([]);
+  
+  // Real-time visual cue helper refs
+  const lastBeatTimeRef = useRef<number>(Date.now());
+  const lastBeatScaleRef = useRef<number>(1.0);
 
   // Listen to floatingTexts changes to trigger a new perfect shockwave
   useEffect(() => {
@@ -178,10 +182,11 @@ export const HeartGameCanvas: React.FC<HeartGameCanvasProps> = ({
       const cx = w / 2;
       const cy = h / 2;
 
-      const isMutatedEnv = gameMode === 'LEVELS' && currentLevel && currentLevel >= 31;
+      const isMutatedEnv = gameMode === 'LEVELS' && currentLevel && currentLevel >= 31 && currentLevel <= 60;
+      const isVascularEnv = gameMode === 'LEVELS' && currentLevel && currentLevel >= 61;
 
       // Clear dark cyber grid background matching Frosted Glass '#0a0505'
-      ctx.fillStyle = isMutatedEnv ? '#02030a' : '#0a0505'; 
+      ctx.fillStyle = isVascularEnv ? '#0a0303' : isMutatedEnv ? '#02030a' : '#0a0505'; 
       ctx.fillRect(0, 0, w, h);
 
       // Light ambient Glow Pulse centered at the heart that intensifies with BPM and beats
@@ -193,7 +198,11 @@ export const HeartGameCanvas: React.FC<HeartGameCanvasProps> = ({
         const alpha = (0.02 + bpmFactor * 0.15) * (beatScale - 0.9);
         
         const glowGrad = ctx.createRadialGradient(cx, cy, 5, cx, cy, w * 0.65);
-        if (isMutatedEnv) {
+        if (isVascularEnv) {
+          // Vascular crimson-indigo glow
+          glowGrad.addColorStop(0, `rgba(${Math.round(200 + bpmFactor * 55)}, 15, 30, ${alpha * 1.5})`);
+          glowGrad.addColorStop(1, 'rgba(10, 3, 3, 0)');
+        } else if (isMutatedEnv) {
           // Cyber glow: neon violet and emerald
           glowGrad.addColorStop(0, `rgba(${Math.round(80 + bpmFactor * 90)}, 20, ${Math.round(200 + bpmFactor * 55)}, ${alpha * 1.4})`);
           glowGrad.addColorStop(1, 'rgba(2, 3, 10, 0)');
@@ -227,8 +236,31 @@ export const HeartGameCanvas: React.FC<HeartGameCanvasProps> = ({
         ctx.restore();
       }
 
+      // Floating Paramedic Telemetry metrics in background
+      if (isVascularEnv && heartHealth > 0) {
+        ctx.save();
+        ctx.fillStyle = 'rgba(239, 68, 68, 0.15)'; // Neon Red translucent
+        ctx.font = '7px monospace, sans-serif';
+        ctx.textAlign = 'left';
+        
+        ctx.fillText(`PARAMEDIC_TELEMETRY: ACTIVE`, 15, 20);
+        ctx.fillText(`VESSEL_PRESSURE: STABLE`, 15, 30);
+        ctx.fillText(`OXYGENATION_SPO2: 98%`, 14, 40);
+        
+        ctx.textAlign = 'right';
+        ctx.fillStyle = 'rgba(37, 99, 235, 0.15)'; // Neon Blue translucent
+        ctx.fillText(`CLOT_PREVENTION_SYSTEM: ON`, w - 15, 20);
+        ctx.fillText(`VESSEL_INTEGRITY: 100%`, w - 15, 30);
+        ctx.fillText(`DEEP_VEIN_MONITOR: SAFE`, w - 15, 40);
+        ctx.restore();
+      }
+
       // HELPER: Compute dynamic venous color smoothly transitioning based on BPM
       const getVeinColor = (bpm: number, alphaMultiplier: number) => {
+        if (isVascularEnv) {
+          // Vascular environment vibrant blood crimson
+          return `rgba(220, 38, 38, ${alphaMultiplier})`;
+        }
         if (isMutatedEnv) {
           // Mutated environment cybernetic neon cyan/purple
           return `rgba(6, 182, 212, ${alphaMultiplier})`;
@@ -281,8 +313,16 @@ export const HeartGameCanvas: React.FC<HeartGameCanvasProps> = ({
         ctx.strokeStyle = conduitColor;
         ctx.lineWidth = 1.0 + (currentBPM / 72) * 0.8 + (beatScale - 1) * 4.0;
         
+        let conduitIndex = 0;
         for (let angle = 0; angle < Math.PI * 2; angle += Math.PI / 4) {
           ctx.beginPath();
+          if (isVascularEnv) {
+            // Alternating artery (red) and vein (blue) channels
+            ctx.strokeStyle = conduitIndex % 2 === 0 ? `rgba(239, 68, 68, ${conduitAlpha * 1.8})` : `rgba(37, 99, 235, ${conduitAlpha * 1.8})`;
+          } else {
+            ctx.strokeStyle = conduitColor;
+          }
+          conduitIndex++;
           // Spawn from edges of active field and route directly into the beating central chambers
           ctx.moveTo(cx + Math.cos(angle) * (w * 0.65), cy + Math.sin(angle) * (w * 0.65));
           ctx.lineTo(cx + Math.cos(angle) * (heartBaseRadius * beatScale * 0.8), cy + Math.sin(angle) * (heartBaseRadius * beatScale * 0.8));
@@ -311,8 +351,13 @@ export const HeartGameCanvas: React.FC<HeartGameCanvasProps> = ({
 
           // Organic oscillation modeling cell elasticity
           const pulsingSize = vp.size * (1 + Math.sin(Date.now() / 160 + vp.pulseOffset) * 0.18);
-          // Calculate the exact gradient responsive color
-          const activeCellColor = getVeinColor(currentBPM, vp.opacity);
+          
+          // Calculate exact dynamic color
+          let activeCellColor = getVeinColor(currentBPM, vp.opacity);
+          if (isVascularEnv) {
+            const channelIdx = Math.round((vp.angle * 4) / Math.PI);
+            activeCellColor = channelIdx % 2 === 0 ? `rgba(239, 68, 68, ${vp.opacity * 1.5})` : `rgba(37, 99, 235, ${vp.opacity * 1.5})`;
+          }
 
           ctx.fillStyle = activeCellColor;
           ctx.beginPath();
@@ -335,14 +380,72 @@ export const HeartGameCanvas: React.FC<HeartGameCanvasProps> = ({
         ctx.stroke();
       });
 
+      // Calculate real-time beat synchronization progress
+      if (beatScale > lastBeatScaleRef.current && (beatScale >= 1.23 || lastBeatScaleRef.current < 1.05)) {
+        lastBeatTimeRef.current = Date.now();
+      }
+      lastBeatScaleRef.current = beatScale;
+
+      const msPerBeat = 60000 / currentBPM;
+      const elapsedSinceBeat = Date.now() - lastBeatTimeRef.current;
+      // Loop the progress safely within [0, 1) mimicking a real-timer
+      const beatProgress = Math.min(0.999, Math.max(0, (elapsedSinceBeat % msPerBeat) / msPerBeat));
+
+      // Define shrinking boundaries targeting the 35% radius tap zone
+      const targetZoneRadius = w * 0.35;
+      const startApproachRadius = targetZoneRadius * 1.65;
+      const approachRadius = targetZoneRadius + (startApproachRadius - targetZoneRadius) * (1 - beatProgress);
+
+      // Draw the shrinking perfect-timing approach cue circle
+      if (heartHealth > 0) {
+        ctx.save();
+        let glowColor = '#10b981'; // Classic perfect green
+        let cueStroke = 'rgba(16, 185, 129, 0.45)';
+        let cueFill = 'rgba(16, 185, 129, 0.015)';
+        
+        if (isVascularEnv) {
+          glowColor = '#ef4444'; // Vascular neon red
+          cueStroke = 'rgba(239, 68, 68, 0.5)';
+          cueFill = 'rgba(239, 68, 68, 0.015)';
+        } else if (isMutatedEnv) {
+          glowColor = '#06b6d4'; // Cyber neon cyan
+          cueStroke = 'rgba(6, 182, 212, 0.5)';
+          cueFill = 'rgba(6, 182, 212, 0.015)';
+        }
+
+        // Glow intensity peaks exactly as the ring matches the perfect target
+        ctx.shadowBlur = Math.max(3, 14 * (1 - beatProgress));
+        ctx.shadowColor = glowColor;
+        ctx.strokeStyle = cueStroke;
+        ctx.lineWidth = 1.2 + (1 - beatProgress) * 2.2;
+        
+        ctx.fillStyle = cueFill;
+        ctx.beginPath();
+        ctx.arc(cx, cy, approachRadius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        // Draw delicate dotted guide darts pointing from the shrinking ring to the target ring
+        ctx.strokeStyle = cueStroke.replace('0.5', '0.1').replace('0.45', '0.08');
+        ctx.lineWidth = 1;
+        ctx.setLineDash([2, 5]);
+        for (let angle = 0; angle < Math.PI * 2; angle += Math.PI / 4) {
+          ctx.beginPath();
+          ctx.moveTo(cx + Math.cos(angle) * approachRadius, cy + Math.sin(angle) * approachRadius);
+          ctx.lineTo(cx + Math.cos(angle) * targetZoneRadius, cy + Math.sin(angle) * targetZoneRadius);
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+
       // Perfect Rhythm Tap Zone Indicator Ring
       // Tapping balls inside/near this boundary makes hitting easy
-      ctx.shadowBlur = isOnBeat ? 20 : 0;
+      ctx.shadowBlur = isOnBeat ? 22 : 0;
       ctx.shadowColor = isOnBeat ? '#ff1a1a' : 'transparent';
-      ctx.strokeStyle = isOnBeat ? 'rgba(255, 26, 26, 0.6)' : 'rgba(255, 255, 255, 0.08)';
-      ctx.lineWidth = isOnBeat ? 3 : 1.5;
+      ctx.strokeStyle = isOnBeat ? 'rgba(255, 26, 26, 0.75)' : 'rgba(255, 255, 255, 0.08)';
+      ctx.lineWidth = isOnBeat ? 3.5 : 1.5;
       ctx.beginPath();
-      ctx.arc(cx, cy, w * 0.35, 0, Math.PI * 2); // 35% of width is ideal target zone
+      ctx.arc(cx, cy, targetZoneRadius, 0, Math.PI * 2); // 35% of width is ideal target zone
       ctx.stroke();
       ctx.shadowBlur = 0; // reset
 
@@ -408,8 +511,25 @@ export const HeartGameCanvas: React.FC<HeartGameCanvasProps> = ({
       // RENDER THE BEATING HEART IN THE CENTER
       const displaySize = heartBaseRadius * beatScale;
       
-      // Add custom visual nano-mesh ring around heart if mutated
-      if (isMutatedEnv && heartHealth > 0) {
+      // Add custom visual nano-mesh ring around heart if mutated or vascular
+      if (isVascularEnv && heartHealth > 0) {
+        ctx.save();
+        ctx.shadowBlur = 12;
+        ctx.shadowColor = '#ef4444';
+        ctx.strokeStyle = 'rgba(239, 68, 68, 0.45)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(cx, cy, displaySize * 1.5, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Second dotted scanner ring
+        ctx.setLineDash([4, 6]);
+        ctx.strokeStyle = 'rgba(37, 99, 235, 0.65)'; // blue
+        ctx.beginPath();
+        ctx.arc(cx, cy, displaySize * 1.8 + Math.sin(Date.now() / 200) * 4, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      } else if (isMutatedEnv && heartHealth > 0) {
         ctx.save();
         ctx.shadowBlur = 10;
         ctx.shadowColor = '#06b6d4';
@@ -895,6 +1015,176 @@ export const HeartGameCanvas: React.FC<HeartGameCanvasProps> = ({
           ctx.lineTo(nx, ny + node.radius * 0.3);
           ctx.stroke();
 
+          ctx.restore();
+        } else if (node.type === NodeType.ARTERIAL_CLOT) {
+          // ARTERIAL_CLOT: Red pulsating cellular mass that gets larger (needs 3 hits)
+          ctx.save();
+          ctx.translate(nx, ny);
+          
+          const throb = 1 + Math.sin(Date.now() / 90) * 0.12;
+          const r = node.radius * throb;
+          
+          // Draw outer dark red cell aggregation
+          ctx.fillStyle = '#991b1b'; // Dark burgundy
+          ctx.strokeStyle = '#ef4444'; // Bright red
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          // Draw rough organic cell curves
+          for (let i = 0; i < 6; i++) {
+            const angle = (i / 6) * Math.PI * 2;
+            const offset = (i % 2 === 0 ? 0.8 : 1.1) * r;
+            const tx = Math.cos(angle) * offset;
+            const ty = Math.sin(angle) * offset;
+            if (i === 0) ctx.moveTo(tx, ty);
+            else ctx.lineTo(tx, ty);
+          }
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+          
+          // Outer platelets
+          ctx.fillStyle = '#f43f5e';
+          for (let i = 0; i < 4; i++) {
+            const pa = (i / 4) * Math.PI * 2 + (Date.now() / 150);
+            const px = Math.cos(pa) * (r * 1.25);
+            const py = Math.sin(pa) * (r * 1.25);
+            ctx.beginPath();
+            ctx.arc(px, py, 2.5, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          
+          ctx.restore();
+        } else if (node.type === NodeType.VEIN_THROMBUS) {
+          // VEIN_THROMBUS: Sleek dark blue jagged thrombus that zigzags (needs 2 hits)
+          ctx.save();
+          ctx.translate(nx, ny);
+          ctx.rotate(Date.now() / 180);
+          
+          const r = node.radius;
+          ctx.fillStyle = '#1e3a8a'; // Deep Navy
+          ctx.strokeStyle = '#3b82f6'; // Neon Blue
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          
+          // Jagged crystal spikes
+          for (let i = 0; i < 8; i++) {
+            const angle = (i / 8) * Math.PI * 2;
+            const distFactor = i % 2 === 0 ? r * 1.25 : r * 0.7;
+            ctx.lineTo(Math.cos(angle) * distFactor, Math.sin(angle) * distFactor);
+          }
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+          
+          // Inner glowing nucleus
+          ctx.fillStyle = '#60a5fa';
+          ctx.beginPath();
+          ctx.arc(0, 0, r * 0.45, 0, Math.PI * 2);
+          ctx.fill();
+          
+          ctx.restore();
+        } else if (node.type === NodeType.ATHEROMA_PLAQUE) {
+          // ATHEROMA_PLAQUE: Dense yellow/orange lipid fat deposit (needs 4 hits)
+          ctx.save();
+          ctx.translate(nx, ny);
+          
+          const r = node.radius;
+          // Outer fat lipids
+          const lipidGrad = ctx.createRadialGradient(0, 0, 2, 0, 0, r * 1.2);
+          lipidGrad.addColorStop(0, '#fef08a'); // Bright light yellow
+          lipidGrad.addColorStop(0.5, '#eab308'); // Golden amber
+          lipidGrad.addColorStop(1, 'rgba(234, 179, 8, 0)');
+          
+          ctx.fillStyle = lipidGrad;
+          ctx.beginPath();
+          ctx.arc(0, 0, r * 1.3, 0, Math.PI * 2);
+          ctx.fill();
+          
+          // Core fatty plaque
+          ctx.fillStyle = '#ca8a04';
+          ctx.strokeStyle = '#fef08a';
+          ctx.lineWidth = 2.5;
+          ctx.beginPath();
+          ctx.arc(0, 0, r * 0.9, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+          
+          // Fat drop globules inside
+          ctx.fillStyle = '#fef08a';
+          ctx.beginPath();
+          ctx.arc(-3, -2, r * 0.25, 0, Math.PI * 2);
+          ctx.arc(3, 3, r * 0.2, 0, Math.PI * 2);
+          ctx.fill();
+          
+          ctx.restore();
+        } else if (node.type === NodeType.CORONARY_EMBOLUS_BOSS) {
+          // CORONARY_EMBOLUS_BOSS: Ultimate crown coronary/thrombus embolus (Level 90, 20 hits!)
+          ctx.save();
+          ctx.translate(nx, ny);
+          
+          const r = node.radius;
+          const rotationAngle = Date.now() / 450;
+          
+          // Glowing vascular aura
+          const aura = ctx.createRadialGradient(0, 0, 5, 0, 0, r * 1.8);
+          aura.addColorStop(0, 'rgba(239, 68, 68, 0.45)'); // Red
+          aura.addColorStop(0.5, 'rgba(37, 99, 235, 0.3)'); // Blue
+          aura.addColorStop(1, 'rgba(0,0,0,0)');
+          ctx.fillStyle = aura;
+          ctx.beginPath();
+          ctx.arc(0, 0, r * 1.8, 0, Math.PI * 2);
+          ctx.fill();
+          
+          // Segmented outer vascular claws
+          ctx.strokeStyle = '#ef4444';
+          ctx.lineWidth = 3.5;
+          const clawCount = 6;
+          for (let i = 0; i < clawCount; i++) {
+            const clawAngle = (i / clawCount) * Math.PI * 2 + rotationAngle;
+            const extLen = r * 1.4 + Math.sin(Date.now() / 150 + i) * 6;
+            ctx.beginPath();
+            ctx.moveTo(0, 0);
+            ctx.quadraticCurveTo(
+              Math.cos(clawAngle + 0.4) * (r * 0.9),
+              Math.sin(clawAngle + 0.4) * (r * 0.9),
+              Math.cos(clawAngle) * extLen,
+              Math.sin(clawAngle) * extLen
+            );
+            ctx.stroke();
+            
+            // Claw tips (alternating red and blue spheres)
+            ctx.fillStyle = i % 2 === 0 ? '#ef4444' : '#3b82f6';
+            ctx.beginPath();
+            ctx.arc(Math.cos(clawAngle) * extLen, Math.sin(clawAngle) * extLen, 5, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          
+          // Core spiky thrombus armor
+          ctx.fillStyle = '#0f172a'; // Deep dark slate
+          ctx.strokeStyle = '#f43f5e';
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          for (let i = 0; i < 12; i++) {
+            const a = (i / 12) * Math.PI * 2 - rotationAngle;
+            const dist = i % 2 === 0 ? r : r * 0.75;
+            ctx.lineTo(Math.cos(a) * dist, Math.sin(a) * dist);
+          }
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+          
+          // Glowing center medical heart scanner (looks very cool)
+          ctx.strokeStyle = '#3b82f6';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(0, 0, r * 0.4, 0, Math.PI * 2);
+          ctx.stroke();
+          
+          ctx.fillStyle = '#ef4444';
+          ctx.beginPath();
+          ctx.arc(0, 0, r * 0.22, 0, Math.PI * 2);
+          ctx.fill();
+          
           ctx.restore();
         } else {
           // Standard electric disruption ring

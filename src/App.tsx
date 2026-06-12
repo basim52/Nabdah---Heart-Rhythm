@@ -76,7 +76,7 @@ export default function App() {
   const [friendsStatuses, setFriendsStatuses] = useState<Record<string, string>>({});
   const [pendingRequests, setPendingRequests] = useState<any[]>([]);
   
-  const [searchEmail, setSearchEmail] = useState<string>('');
+  const [searchName, setSearchName] = useState<string>('');
   const [searchResult, setSearchResult] = useState<any | null>(null);
   const [searchError, setSearchError] = useState<string>('');
   const [isSearching, setIsSearching] = useState<boolean>(false);
@@ -138,31 +138,70 @@ export default function App() {
   const [maxUnlockedLevel, setMaxUnlockedLevel] = useState<number>(1);
   const [levelCompleted, setLevelCompleted] = useState<boolean>(false);
   const [showLevelsView, setShowLevelsView] = useState<boolean>(false);
-  const [activeLevelTab, setActiveLevelTab] = useState<'CLASSIC' | 'MUTATED'>('CLASSIC');
+  const [activeLevelTab, setActiveLevelTab] = useState<'CLASSIC' | 'MUTATED' | 'VASCULAR'>('CLASSIC');
   const [selectedLevelInfo, setSelectedLevelInfo] = useState<number | null>(null);
 
-  // Helper to calculate stage configurations (1 to 60) - Scales difficulty beautifully
+  // Helper to calculate stage configurations (1 to 90) - Scales difficulty beautifully
   const getStageConfig = (lvl: number) => {
-    // Advanced Cyber Mutated stages (31 to 60)
+    // Advanced Vascular Campaign stages (61 to 90) & Mutated stages (31 to 60)
     let targetScore = lvl * 100 + 50; 
     if (lvl === 30) {
       targetScore = 3500; // Epic boss score goal
     } else if (lvl === 60) {
       targetScore = 6000; // Ultimate giant megaboss boss score goal
+    } else if (lvl === 90) {
+      targetScore = 9000; // Ultimate coronary embolus boss score goal
+    } else if (lvl >= 61) {
+      targetScore = 6200 + (lvl - 60) * 140;
     } else if (lvl >= 31) {
       // Scale target scores nicely for the advanced arc
       targetScore = 3000 + (lvl - 30) * 120;
     }
     
     // Shorter spawn intervals as level increases (clamped sensibly)
-    const baseSpawnInterval = Math.max(lvl >= 50 ? 320 : lvl >= 31 ? 380 : lvl === 30 ? 460 : 440, 2400 - (lvl * 64)); 
+    const baseSpawnInterval = Math.max(
+      lvl >= 80 ? 270 : lvl >= 61 ? 310 : lvl >= 50 ? 320 : lvl >= 31 ? 380 : lvl === 30 ? 460 : 440,
+      2400 - (lvl * 64)
+    ); 
     
     // Higher speed base factor as difficulty expands
-    const baseSpeed = 0.8 + (lvl * 0.057); 
+    const baseSpeed = lvl >= 61 ? 0.8 + (lvl * 0.046) : 0.8 + (lvl * 0.057); 
     return { targetScore, baseSpawnInterval, baseSpeed };
   };
 
   const getStageDescription = (lvl: number) => {
+    if (lvl === 90) {
+      return {
+        title: "انسداد الشريان التاجي الأعظم (المستوى النهائي النهائي 90)! 🫀🚨",
+        threats: "زعيم الانسداد الوعائي النهائي CORONARY_EMBOLUS_BOSS (يتطلب 20 ضربة!) + سيل جارف من الخثرات والجلطات الشريانية والوريدية المتزامنة!",
+        speed: "صاعقة وقاتلة ⚡🔴🔵",
+        desc: "لقد غدوت المسعف الرائد المنقذ لحياة المريض! الشريان التاجي الرئيسي مسدود تماماً ويحتاج لـ 20 ضربة مدوية مباشرة لتفتيته، مع تدفق رهيب للأوعية والشرايين الممتلئة بالخثرات من الجوانب الثمانية. حافظ على ثباتك الإيقاعي الكامل لمنع تشكل الجلطات وحماية شرايين الحياة وتطهير قلب المريض للنهاية وصناعة الإعجاز الطبي!"
+      };
+    }
+    if (lvl >= 81) {
+      return {
+        title: `حملة الأوعية: الخثرة الوريدية الصاعقة - مستوى ${lvl}`,
+        threats: "الخثرة الوريدية الزرقاء (Vein Thrombus - نقرتان، حركة متعرجة سريعة للغاية) + جلطات شريانية صعبة ولويحات صفراء!",
+        speed: "سريعة وعشوائية متعرجة 🌀🔵",
+        desc: "الأوردة العميقة بحاجة لمسعف ذكي وسريع! جلطات الأوردة الزرقاء تتحرك بشكل متعرج خاطف كأنها تختبئ داخل جدران الأوعية. تتبعها بكفاءة قبل أن تسد الرئتين!"
+      };
+    }
+    if (lvl >= 71) {
+      return {
+        title: `حملة الأوعية: تصلب الشرايين العصيدي - مستوى ${lvl}`,
+        threats: "لويحات التصلب الدهنية الضخمة الصفراء (Atheroma Plaque - تحتاج 4 نقرات مغلظة لتفتيتها) + جلطات قرمزية متسارعة!",
+        speed: "نبض وعائي جداري ضيق ⏳🟡",
+        desc: "لقد أدى تراكم الكوليسترول الملوث إلى انسدادات متصلبة صعبة الإذابة! تحتاج لويحات التصلب الصفراء لضربات مركزة وتفتيت متكرر لفتح منفذ الشرايين صماماً صماماً وتوسعة الأوعية."
+      };
+    }
+    if (lvl >= 61) {
+      return {
+        title: `حملة الأوعية الدموية: منع الجلطات - مستوى ${lvl}`,
+        threats: "الجلطة الشريانية المتضخمة الحمراء (Arterial Clot - تحتاج 3 نقرات وتكبر تدريجيا في الحجم أثناء اقترابها من القلب) + منظمات نبض!",
+        speed: "نبض شرياني حاد ودافق 🛑🔴",
+        desc: "مرحباً بك في حملة الأوعية الدموية والشرايين! الجلطات الشريانية الحمراء تغزو جدران شرايين المريض وتتضخم أثناء حركتها. بصفتك المسعف البطل، تفتيتها بنقرات متلاحقة يمنع الجلطات القلبية الوعائية وينقذ دقاته!"
+      };
+    }
     if (lvl === 60) {
       return {
         title: "المواجهة المطلقة: المدمر الميكانيكي الأخير (المستوى النهائي 60)!",
@@ -594,7 +633,7 @@ export default function App() {
         
         // Save level status
         const nextLvl = currentLevel + 1;
-        if (nextLvl <= 60 && nextLvl > maxUnlockedLevel) {
+        if (nextLvl <= 90 && nextLvl > maxUnlockedLevel) {
           setMaxUnlockedLevel(nextLvl);
           localStorage.setItem('nabdah_max_unlocked_level_v1', String(nextLvl));
         }
@@ -663,7 +702,10 @@ export default function App() {
             nextAngle = node.angle + Math.sin(node.distance / 12) * 0.04;
           } else if (node.type === NodeType.ARRHYTHMIA) {
             nextAngle = node.angle + Math.sin(now / 80) * 0.06;
-          } else if (node.type === NodeType.BIG_BACTERIA || node.type === NodeType.SMALL_BACTERIA || node.type === NodeType.GIANT_BOSS || node.type === NodeType.FAST_GERM) {
+          } else if (node.type === NodeType.VEIN_THROMBUS) {
+            // Zigzag motion mimicking cardiac venous valves
+            nextAngle = node.angle + Math.sin(now / 50) * 0.08;
+          } else if (node.type === NodeType.BIG_BACTERIA || node.type === NodeType.SMALL_BACTERIA || node.type === NodeType.GIANT_BOSS || node.type === NodeType.FAST_GERM || node.type === NodeType.CORONARY_EMBOLUS_BOSS) {
             // High-polish live organic wiggle/dancing offset by unique node id phase
             const wigglePhase = (node.id.charCodeAt(0) % 10) * 1.5;
             nextAngle = node.angle + Math.sin(now / 100 + wigglePhase) * 0.038;
@@ -675,13 +717,21 @@ export default function App() {
           if (node.type === NodeType.ARRHYTHMIA) {
             const speedWave = 0.5 + Math.abs(Math.sin(now / 200)) * 1.5;
             currentSpeed *= speedWave;
+          } else if (node.type === NodeType.ATHEROMA_PLAQUE) {
+            // Atheroma Plaque is very dense, moving slower
+            currentSpeed *= 0.45;
           }
 
           if (stabilizationActiveRef.current) {
             currentSpeed *= 0.4;
           }
 
-          // Check summon condition for BIG_BACTERIA or GIANT_BOSS
+          // Grows in size as it gets closer to heart
+          const finalRadius = node.type === NodeType.ARTERIAL_CLOT 
+            ? Math.min(22, 13 + (195 - (node.distance - currentSpeed)) * 0.05) 
+            : node.radius;
+
+          // Check summon condition for BIG_BACTERIA, GIANT_BOSS, or CORONARY_EMBOLUS_BOSS
           let lastSummon = node.lastSummonTime;
           if (node.type === NodeType.BIG_BACTERIA) {
             if (!lastSummon) {
@@ -758,10 +808,47 @@ export default function App() {
                 color: '#df49fa'
               });
             }
+          } else if (node.type === NodeType.CORONARY_EMBOLUS_BOSS) {
+            if (!lastSummon) {
+              lastSummon = now;
+            } else if (now - lastSummon >= 8000) {
+              lastSummon = now;
+              playedSound = true;
+              // Summon a crimson arterial clot and a deep blue vein thrombus
+              extraNodes.push({
+                id: Math.random().toString(36).substr(2, 9),
+                type: NodeType.ARTERIAL_CLOT,
+                x: 0,
+                y: 0,
+                radius: 12,
+                angle: node.angle - 0.22,
+                distance: node.distance - 15,
+                speed: node.speed * 1.4,
+                health: 3,
+                maxHealth: 3,
+                pulseScale: 1.0,
+                color: '#dc2626'
+              });
+              extraNodes.push({
+                id: Math.random().toString(36).substr(2, 9),
+                type: NodeType.VEIN_THROMBUS,
+                x: 0,
+                y: 0,
+                radius: 11,
+                angle: node.angle + 0.22,
+                distance: node.distance - 10,
+                speed: node.speed * 1.8,
+                health: 2,
+                maxHealth: 2,
+                pulseScale: 1.0,
+                color: '#2563eb'
+              });
+            }
           }
 
           return {
             ...node,
+            radius: finalRadius,
             angle: nextAngle,
             distance: node.distance - currentSpeed,
             pulseScale: 1 + Math.sin(now / 150) * 0.08,
@@ -788,7 +875,10 @@ export default function App() {
               nextAngle = node.angle + Math.sin(node.distance / 12) * 0.04;
             } else if (node.type === NodeType.ARRHYTHMIA) {
               nextAngle = node.angle + Math.sin(now / 80) * 0.06;
-            } else if (node.type === NodeType.BIG_BACTERIA || node.type === NodeType.SMALL_BACTERIA || node.type === NodeType.GIANT_BOSS || node.type === NodeType.FAST_GERM) {
+            } else if (node.type === NodeType.VEIN_THROMBUS) {
+              // Zigzag motion mimicking cardiac venous valves
+              nextAngle = node.angle + Math.sin(now / 50) * 0.08;
+            } else if (node.type === NodeType.BIG_BACTERIA || node.type === NodeType.SMALL_BACTERIA || node.type === NodeType.GIANT_BOSS || node.type === NodeType.FAST_GERM || node.type === NodeType.CORONARY_EMBOLUS_BOSS) {
               // High-polish live organic wiggle/dancing offset by unique node id phase for Player 2
               const wigglePhase = (node.id.charCodeAt(0) % 10) * 1.5;
               nextAngle = node.angle + Math.sin(now / 100 + wigglePhase) * 0.038;
@@ -800,13 +890,21 @@ export default function App() {
             if (node.type === NodeType.ARRHYTHMIA) {
               const speedWave = 0.5 + Math.abs(Math.sin(now / 200)) * 1.5;
               currentSpeed *= speedWave;
+            } else if (node.type === NodeType.ATHEROMA_PLAQUE) {
+              // Atheroma Plaque is very dense, moving slower
+              currentSpeed *= 0.45;
             }
 
             if (stabilizationActiveRef2.current) {
               currentSpeed *= 0.4;
             }
 
-            // Check summon condition for BIG_BACTERIA or GIANT_BOSS
+            // Grows in size as it gets closer to heart for Player 2
+            const finalRadius = node.type === NodeType.ARTERIAL_CLOT 
+              ? Math.min(22, 13 + (195 - (node.distance - currentSpeed)) * 0.05) 
+              : node.radius;
+
+            // Check summon condition for BIG_BACTERIA, GIANT_BOSS, or CORONARY_EMBOLUS_BOSS
             let lastSummon = node.lastSummonTime;
             if (node.type === NodeType.BIG_BACTERIA) {
               if (!lastSummon) {
@@ -883,10 +981,47 @@ export default function App() {
                   color: '#df49fa'
                 });
               }
+            } else if (node.type === NodeType.CORONARY_EMBOLUS_BOSS) {
+              if (!lastSummon) {
+                lastSummon = now;
+              } else if (now - lastSummon >= 8000) {
+                lastSummon = now;
+                playedSound = true;
+                // Summon a crimson arterial clot and a deep blue vein thrombus
+                extraNodes.push({
+                  id: Math.random().toString(36).substr(2, 9),
+                  type: NodeType.ARTERIAL_CLOT,
+                  x: 0,
+                  y: 0,
+                  radius: 12,
+                  angle: node.angle - 0.22,
+                  distance: node.distance - 15,
+                  speed: node.speed * 1.4,
+                  health: 3,
+                  maxHealth: 3,
+                  pulseScale: 1.0,
+                  color: '#dc2626'
+                });
+                extraNodes.push({
+                  id: Math.random().toString(36).substr(2, 9),
+                  type: NodeType.VEIN_THROMBUS,
+                  x: 0,
+                  y: 0,
+                  radius: 11,
+                  angle: node.angle + 0.22,
+                  distance: node.distance - 10,
+                  speed: node.speed * 1.8,
+                  health: 2,
+                  maxHealth: 2,
+                  pulseScale: 1.0,
+                  color: '#2563eb'
+                });
+              }
             }
 
             return {
               ...node,
+              radius: finalRadius,
               angle: nextAngle,
               distance: node.distance - currentSpeed,
               pulseScale: 1 + Math.sin(now / 150) * 0.08,
@@ -991,7 +1126,89 @@ export default function App() {
       
       if (gameMode === 'LEVELS') {
         const stage = currentLevel;
-        if (stage === 60) {
+        if (stage === 90) {
+          // Ultimate Coronary Embolus Final boss (Level 90)
+          if (roll < 0.12) {
+            type = NodeType.CORONARY_EMBOLUS_BOSS;
+            color = '#f43f5e';
+            initialHealth = 20; // Needs 20 hits!
+            speed = 0.28;
+            radius = 32;
+          } else if (roll >= 0.12 && roll < 0.35) {
+            type = NodeType.ARTERIAL_CLOT;
+            color = '#dc2626';
+            initialHealth = 3;
+            speed = 1.0;
+            radius = 16;
+          } else if (roll >= 0.35 && roll < 0.58) {
+            type = NodeType.VEIN_THROMBUS;
+            color = '#2563eb';
+            initialHealth = 2;
+            speed = 1.7;
+            radius = 13;
+          } else if (roll >= 0.58 && roll < 0.78) {
+            type = NodeType.ATHEROMA_PLAQUE;
+            color = '#facc15';
+            initialHealth = 4;
+            speed = 0.6;
+            radius = 18;
+          } else if (roll >= 0.78 && roll < 0.86) {
+            type = NodeType.ADRENALINE;
+            color = '#10b981';
+            speed = 1.1;
+            radius = 11;
+            initialHealth = 1;
+          } else {
+            type = NodeType.PACEMAKER;
+            color = '#38bdf8';
+            speed = 1.0;
+            radius = 12;
+            initialHealth = 1;
+          }
+        } else if (stage >= 61) {
+          // Campaign Levels 61-89
+          if (roll < 0.22 && stage >= 81) {
+            // Vein Thrombus (Deep blue zigzag, fast, 2-hits)
+            type = NodeType.VEIN_THROMBUS;
+            color = '#2563eb';
+            initialHealth = 2;
+            speed = 1.6 + (stage * 0.007);
+            radius = 13;
+          } else if (roll >= 0.22 && roll < 0.44 && stage >= 71) {
+            // Atheroma Plaque (Fat lipid deposit, slow, 4-hits)
+            type = NodeType.ATHEROMA_PLAQUE;
+            color = '#facc15';
+            initialHealth = 4;
+            speed = 0.55 + (stage * 0.003);
+            radius = 18;
+          } else if (roll >= 0.44 && roll < 0.72) {
+            // Arterial Clot (Needs 3 hits, grows bigger as it flows)
+            type = NodeType.ARTERIAL_CLOT;
+            color = '#dc2626';
+            initialHealth = 3;
+            speed = 0.95 + (stage * 0.006);
+            radius = 15;
+          } else if (roll >= 0.72 && roll < 0.78) {
+            type = NodeType.ADRENALINE;
+            color = '#10b981';
+            speed = 1.1;
+            radius = 11;
+            initialHealth = 1;
+          } else if (roll >= 0.78 && roll < 0.84) {
+            type = NodeType.PACEMAKER;
+            color = '#38bdf8';
+            speed = 1.0;
+            radius = 12;
+            initialHealth = 1;
+          } else {
+            // Helper/Standard clot etc.
+            type = NodeType.CLOT;
+            color = '#f43f5e';
+            initialHealth = 2;
+            speed = 0.9 + (stage * 0.006);
+            radius = 12;
+          }
+        } else if (stage === 60) {
           // Ultimate Final Megaboss stage (Level 60)
           if (roll < 0.08) {
             type = NodeType.NANO_MEGA_BOSS;
@@ -1857,27 +2074,64 @@ export default function App() {
   };
 
   const handleSearchFriend = async () => {
-    if (!searchEmail.trim()) return;
+    const term = searchName.trim();
+    if (!term) return;
     setIsSearching(true);
     setSearchError('');
     setSearchResult(null);
 
     try {
-      const q = query(
-        collection(db, 'users'), 
-        where('email', '==', searchEmail.toLowerCase().trim())
-      );
-      const snap = await getDocs(q);
-      if (!snap.empty) {
-        const userDoc = snap.docs[0];
-        const userData = userDoc.data();
-        if (userData.uid === currentUser?.uid) {
+      // Build search variations to address capitalization variations in latin alphabet names
+      const variations = [term];
+      if (/^[a-zA-Z]/.test(term)) {
+        const capitalized = term.charAt(0).toUpperCase() + term.slice(1);
+        const lowercased = term.toLowerCase();
+        const uppercased = term.toUpperCase();
+        if (!variations.includes(capitalized)) variations.push(capitalized);
+        if (!variations.includes(lowercased)) variations.push(lowercased);
+        if (!variations.includes(uppercased)) variations.push(uppercased);
+      }
+
+      let foundUser: any = null;
+
+      // Run queries for each variation
+      for (const t of variations) {
+        const q = query(
+          collection(db, 'users'), 
+          where('displayName', '>=', t),
+          where('displayName', '<=', t + '\uf8ff')
+        );
+        const snap = await getDocs(q);
+        if (!snap.empty) {
+          for (const doc of snap.docs) {
+            const uData = doc.data();
+            if (uData.uid !== currentUser?.uid) {
+              foundUser = uData;
+              break;
+            }
+          }
+        }
+        if (foundUser) break;
+      }
+
+      if (foundUser) {
+        setSearchResult(foundUser);
+      } else {
+        // Let's check if they searched for themselves exactly
+        let matchedSelf = false;
+        for (const t of variations) {
+          const qSelf = query(collection(db, 'users'), where('displayName', '==', t));
+          const snapSelf = await getDocs(qSelf);
+          if (!snapSelf.empty && snapSelf.docs[0].data().uid === currentUser?.uid) {
+            matchedSelf = true;
+            break;
+          }
+        }
+        if (matchedSelf) {
           setSearchError('لا يمكنك إضافة نفسك!');
         } else {
-          setSearchResult(userData);
+          setSearchError('عذراً، لم نجد طبيباً مسجلاً بهذا الاسم.');
         }
-      } else {
-        setSearchError('عذراً، لم نجد طبيباً مسجلاً بهذا البريد.');
       }
     } catch (e) {
       setSearchError('حدث خطأ أثناء البحث.');
@@ -1909,7 +2163,7 @@ export default function App() {
 
       alert('تم إرسال طلب الصداقة بنجاح! 🚀');
       setSearchResult(null);
-      setSearchEmail('');
+      setSearchName('');
     } catch (e) {
       console.error(e);
       alert('فشل إرسال الطلب.');
@@ -2205,7 +2459,7 @@ export default function App() {
 
               {/* Add Friends Section */}
               <div className="bg-white/5 border border-white/5 rounded-2xl p-3.5 space-y-2">
-                <p className="text-[10px] text-white/40 font-bold uppercase tracking-widest">إضافة زميل طبيب جديد:</p>
+                <p className="text-[10px] text-white/40 font-bold uppercase tracking-widest">البحث عن طبيب بالاسم:</p>
                 <div className="flex gap-2">
                   <button
                     onClick={handleSearchFriend}
@@ -2215,10 +2469,10 @@ export default function App() {
                     {isSearching ? 'جاري..' : 'بحث'}
                   </button>
                   <input
-                    type="email"
-                    placeholder="أدخل بريد الطبيب الإلكتروني"
-                    value={searchEmail}
-                    onChange={(e) => setSearchEmail(e.target.value)}
+                    type="text"
+                    placeholder="أدخل اسم الطبيب المسجل"
+                    value={searchName}
+                    onChange={(e) => setSearchName(e.target.value)}
                     className="flex-1 bg-black/40 border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white text-center outline-none focus:border-red-500 transition-all font-sans"
                   />
                 </div>
@@ -2338,7 +2592,7 @@ export default function App() {
               {/* Back button */}
               <div className="flex justify-between items-center mb-1">
                 <h3 className="text-lg font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-red-400 to-amber-400 font-display">
-                  {activeLevelTab === 'CLASSIC' ? "الأوعية الكلاسيكية: المراحل 1 - 30 🏆" : "الطفرة السيبرانية: المراحل 31 - 60 🧪"}
+                  {activeLevelTab === 'CLASSIC' ? "الأوعية الكلاسيكية: المراحل 1 - 30 🏆" : activeLevelTab === 'MUTATED' ? "الطفرة السيبرانية: المراحل 31 - 60 🧪" : "حملة الأوردة والشرايين: المراحل 61 - 90 🚨"}
                 </h3>
                 <button
                   onClick={() => setShowLevelsView(false)}
@@ -2350,42 +2604,55 @@ export default function App() {
               </div>
 
               {/* Tabs selector */}
-              <div className="flex gap-2 p-1 bg-black/40 rounded-2xl border border-white/5">
+              <div className="flex gap-1.5 p-1 bg-black/40 rounded-2xl border border-white/5">
                 <button
                   type="button"
                   onClick={() => setActiveLevelTab('CLASSIC')}
-                  className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${
+                  className={`flex-1 py-2 text-[10px] sm:text-xs font-bold rounded-xl transition-all cursor-pointer ${
                     activeLevelTab === 'CLASSIC'
                       ? 'bg-gradient-to-r from-red-500/20 to-red-600/20 text-red-400 border border-red-500/30 shadow-[0_0_12px_rgba(239,68,68,0.15)]'
                       : 'text-white/60 hover:text-white hover:bg-white/5 border border-transparent'
                   }`}
                 >
-                  المراحل الكلاسيكية (1 - 30)
+                  الكلاسيكية (1-30)
                 </button>
                 <button
                   type="button"
                   onClick={() => setActiveLevelTab('MUTATED')}
-                  className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${
+                  className={`flex-1 py-2 text-[10px] sm:text-xs font-bold rounded-xl transition-all cursor-pointer ${
                     activeLevelTab === 'MUTATED'
                       ? 'bg-gradient-to-r from-cyan-500/20 to-cyan-600/20 text-cyan-400 border border-cyan-500/30 shadow-[0_0_12px_rgba(6,182,212,0.15)]'
                       : 'text-white/60 hover:text-white hover:bg-white/5 border border-transparent'
                   }`}
                 >
-                  الطفرة السيبرانية (31 - 60)
+                  السيبرانية (31-60)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveLevelTab('VASCULAR')}
+                  className={`flex-1 py-2 text-[10px] sm:text-xs font-bold rounded-xl transition-all cursor-pointer ${
+                    activeLevelTab === 'VASCULAR'
+                      ? 'bg-gradient-to-r from-rose-500/20 to-rose-600/20 text-rose-400 border border-rose-500/30 shadow-[0_0_12px_rgba(244,63,94,0.15)]'
+                      : 'text-white/60 hover:text-white hover:bg-white/5 border border-transparent'
+                  }`}
+                >
+                  الأوعية (61-90)
                 </button>
               </div>
 
               <p className="text-xs text-white/60 leading-relaxed bg-white/5 p-3 rounded-xl border border-white/5 text-right font-sans" dir="rtl">
                 {activeLevelTab === 'CLASSIC' 
                   ? "طهر صمامات وعضلات القلب بالتدريج وتجاوز 30 مرحلة من الخطورة والآفات الجرثومية! تزداد وتيرة النبض والعدوانية مع تقدمك."
-                  : "⚠️ تحذير الطفرة السيبرانية: 30 مرحلة جديدة تختلف عن ال30 الأولى تماماً ببيئة لعب زرقاء مجهرية، جراثيم إلكترونية ذكية، وموسيقى طوارئ تركيبية مختلفة!"
+                  : activeLevelTab === 'MUTATED'
+                    ? "⚠️ تحذير الطفرة السيبرانية: 30 مرحلة جديدة تختلف عن ال30 الأولى تماماً ببيئة لعب زرقاء مجهرية، جراثيم إلكترونية ذكية، وموسيقى طوارئ تركيبية مختلفة!"
+                    : "🔴🔵 حملة المسعف للأوعية والشرايين: 30 مرحلة فائقة الصعوبة والتشويق! جلطات شريانية تتضخم، وخثرات وريدية متعرجة خاطفة لتطوي القنوات، ولويحات تصلب صفراء بـ 4 ضربات، وزعيم الانسداد الأعظم بقوة 20 ضربة!"
                 }
               </p>
 
               {/* levels list */}
               <div className="grid grid-cols-5 gap-2 max-h-[280px] overflow-y-auto pr-1">
                 {Array.from({ length: 30 }).map((_, i) => {
-                  const lNum = activeLevelTab === 'CLASSIC' ? (i + 1) : (i + 31);
+                  const lNum = activeLevelTab === 'CLASSIC' ? (i + 1) : activeLevelTab === 'MUTATED' ? (i + 31) : (i + 61);
                   const isUnlocked = lNum <= maxUnlockedLevel;
                   const isCompleted = lNum < maxUnlockedLevel || JSON.parse(localStorage.getItem('nabdah_completed_levels_v1') || '[]').includes(lNum);
 
@@ -2403,7 +2670,9 @@ export default function App() {
                             ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400 hover:scale-[1.05] shadow-[0_0_10px_rgba(16,185,129,0.15)]'
                             : activeLevelTab === 'MUTATED'
                               ? 'bg-cyan-500/5 border-cyan-500/20 text-cyan-300 hover:border-cyan-400 hover:scale-[1.05]'
-                              : 'bg-white/5 border-white/10 text-white hover:border-red-500 hover:scale-[1.05]'
+                              : activeLevelTab === 'VASCULAR'
+                                ? 'bg-rose-500/5 border-rose-500/20 text-rose-350 hover:border-rose-400 hover:scale-[1.05]'
+                                : 'bg-white/5 border-white/10 text-white hover:border-red-500 hover:scale-[1.05]'
                       }`}
                     >
                       {/* Status Check / Lock */}

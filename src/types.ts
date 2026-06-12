@@ -18,7 +18,11 @@ export enum NodeType {
   CYBER_NANO_PHAGE = 'CYBER_NANO_PHAGE',     // Apollo-shaped yellow/neon, teleports in erratic steps (Level 31+)
   PLASMA_SPORE = 'PLASMA_SPORE',             // Glowing hot coral sphere with shifting tentacles (Level 31+)
   CROWN_CORONAVIRUS = 'CROWN_CORONAVIRUS',   // Large spiked purple virus, needs 3 hits and swells in size (Level 31+)
-  NANO_MEGA_BOSS = 'NANO_MEGA_BOSS'          // Huge mechanical megaboss for Level 60 (15 hits!)
+  NANO_MEGA_BOSS = 'NANO_MEGA_BOSS',         // Huge mechanical megaboss for Level 60 (15 hits!)
+  ARTERIAL_CLOT = 'ARTERIAL_CLOT',           // Critical blood clot in the red arteries (3-hits, gets bigger as it nears heart)
+  VEIN_THROMBUS = 'VEIN_THROMBUS',           // Sleek dark blue thrombus sliding in the veins (fast, 2-hits, zigzags)
+  ATHEROMA_PLAQUE = 'ATHEROMA_PLAQUE',       // Golden fatty plaque blocking blood vessels (needs 4 heavy taps)
+  CORONARY_EMBOLUS_BOSS = 'CORONARY_EMBOLUS_BOSS' // The sovereign Pulmonary/Coronary embolus blocking all valves (Level 90, 20 hits!)
 }
 
 export interface GameNode {
