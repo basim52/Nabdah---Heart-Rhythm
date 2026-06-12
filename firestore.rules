@@ -35,7 +35,7 @@ service cloud.firestore {
       allow list: if isSignedIn(); // Allow searching registered players
       allow create: if isSignedIn() && isOwner(userId) && isValidId(userId) && isValidUserProfile(incoming()) && incoming().updatedAt == request.time;
       allow update: if isSignedIn() && isOwner(userId) && isValidId(userId) && isValidUserProfile(incoming()) && incoming().updatedAt == request.time && (
-        incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt', 'displayName', 'photoURL'])
+        incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt', 'displayName', 'photoURL', 'maxUnlockedLevel', 'completedLevels'])
       );
     }
 
@@ -43,7 +43,9 @@ service cloud.firestore {
       return data.uid == request.auth.uid
         && (data.email == null || (data.email is string && data.email.size() <= 150))
         && data.displayName is string && data.displayName.size() <= 80
-        && data.status in ['online', 'offline', 'ingame'];
+        && data.status in ['online', 'offline', 'ingame']
+        && (data.maxUnlockedLevel == null || data.maxUnlockedLevel is int)
+        && (data.completedLevels == null || data.completedLevels is list);
     }
 
     // Friendships Entity Collection Rules
@@ -71,9 +73,7 @@ service cloud.firestore {
       allow get: if isSignedIn() && isValidId(invitationId) && (existing().senderId == request.auth.uid || existing().receiverId == request.auth.uid);
       allow list: if isSignedIn() && (resource.data.senderId == request.auth.uid || resource.data.receiverId == request.auth.uid);
       allow create: if isSignedIn() && isValidId(invitationId) && incoming().senderId == request.auth.uid && isValidInvitation(incoming()) && incoming().createdAt == request.time;
-      allow update: if isSignedIn() && isValidId(invitationId) && (existing().senderId == request.auth.uid || existing().receiverId == request.auth.uid) && isValidInvitation(incoming()) && incoming().createdAt == existing().createdAt && (
-        incoming().diff(existing()).affectedKeys().hasOnly(['status'])
-      );
+      allow update: if isSignedIn() && isValidId(invitationId) && (existing().senderId == request.auth.uid || existing().receiverId == request.auth.uid) && incoming().diff(existing()).affectedKeys().hasOnly(['status']) && incoming().status in ['pending', 'accepted', 'declined'];
       allow delete: if isSignedIn() && isValidId(invitationId) && (existing().senderId == request.auth.uid || existing().receiverId == request.auth.uid);
     }
 

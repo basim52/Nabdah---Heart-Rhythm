@@ -30,6 +30,14 @@
           ],
           "description": "Immediate network connection status"
         },
+        "maxUnlockedLevel": {
+          "type": "integer",
+          "description": "Highest level unlocked by the user (up to 90)"
+        },
+        "completedLevels": {
+          "type": "array",
+          "description": "List of level numbers completed by the user"
+        },
         "updatedAt": {
           "type": "string",
           "description": "Server timestamp when profile was modified"

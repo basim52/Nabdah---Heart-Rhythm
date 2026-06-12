@@ -327,7 +327,7 @@ export default function App() {
     const rawLvl = localStorage.getItem('nabdah_max_unlocked_level_v1');
     if (rawLvl) {
       const parsed = parseInt(rawLvl, 10);
-      if (!isNaN(parsed) && parsed >= 1 && parsed <= 30) {
+      if (!isNaN(parsed) && parsed >= 1 && parsed <= 90) {
         setMaxUnlockedLevel(parsed);
       }
     }
@@ -368,6 +368,49 @@ export default function App() {
         }
 
         setPlayerName(user.displayName || user.email?.split('@')[0] || 'نبّاض');
+
+        // Restore & Sync progress with Firestore
+        try {
+          const userSnap = await getDoc(userRef);
+          if (userSnap.exists()) {
+            const userData = userSnap.data();
+            const dbMax = userData.maxUnlockedLevel || 1;
+            const dbCompleted: number[] = userData.completedLevels || [];
+
+            // Read from local storage
+            const localMaxStr = localStorage.getItem('nabdah_max_unlocked_level_v1');
+            const localMax = localMaxStr ? parseInt(localMaxStr, 10) : 1;
+            const finalMax = Math.max(dbMax, isNaN(localMax) ? 1 : localMax);
+
+            let localCompleted: number[] = [];
+            try {
+              localCompleted = JSON.parse(localStorage.getItem('nabdah_completed_levels_v1') || '[]');
+            } catch (e) {
+              console.error(e);
+            }
+
+            const mergedSet = new Set([...dbCompleted, ...localCompleted]);
+            const finalCompleted = Array.from(mergedSet).filter(lvl => !isNaN(lvl) && lvl >= 1 && lvl <= 90);
+
+            // Update local storage
+            localStorage.setItem('nabdah_max_unlocked_level_v1', String(finalMax));
+            localStorage.setItem('nabdah_completed_levels_v1', JSON.stringify(finalCompleted));
+
+            // Set React level state
+            setMaxUnlockedLevel(finalMax);
+
+            // Update database if local has different or newer progress
+            if (finalMax > dbMax || finalCompleted.length > dbCompleted.length) {
+              await updateDoc(userRef, {
+                maxUnlockedLevel: finalMax,
+                completedLevels: finalCompleted,
+                updatedAt: serverTimestamp()
+              });
+            }
+          }
+        } catch (err) {
+          console.error("Failed to restore level progress from cloud database: ", err);
+        }
 
         // Listen to friendships where current user is user1
         const q1 = query(collection(db, 'friendships'), where('user1', '==', user.uid));
@@ -633,20 +676,37 @@ export default function App() {
         
         // Save level status
         const nextLvl = currentLevel + 1;
+        let updatedMaxLvl = maxUnlockedLevel;
         if (nextLvl <= 90 && nextLvl > maxUnlockedLevel) {
+          updatedMaxLvl = nextLvl;
           setMaxUnlockedLevel(nextLvl);
           localStorage.setItem('nabdah_max_unlocked_level_v1', String(nextLvl));
         }
         
         // Add level to completed list
+        let completedList: number[] = [];
         try {
-          const completedList = JSON.parse(localStorage.getItem('nabdah_completed_levels_v1') || '[]');
+          completedList = JSON.parse(localStorage.getItem('nabdah_completed_levels_v1') || '[]');
           if (!completedList.includes(currentLevel)) {
             completedList.push(currentLevel);
             localStorage.setItem('nabdah_completed_levels_v1', JSON.stringify(completedList));
           }
         } catch (e) {
           console.error(e);
+        }
+
+        // Deploy/save level progress immediately to Firestore if authenticated
+        if (currentUser) {
+          const userRef = doc(db, 'users', currentUser.uid);
+          try {
+            updateDoc(userRef, {
+              maxUnlockedLevel: updatedMaxLvl,
+              completedLevels: completedList,
+              updatedAt: serverTimestamp()
+            });
+          } catch (e) {
+            console.error("Failed to sync progress to cloud database on level complete: ", e);
+          }
         }
         return;
       }
