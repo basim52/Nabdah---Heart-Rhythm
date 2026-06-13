@@ -1324,6 +1324,22 @@ export const HeartGameCanvas: React.FC<HeartGameCanvasProps> = ({
           ctx.textBaseline = 'middle';
           ctx.fillText('💧', 0, 0);
           ctx.restore();
+        } else if (node.type === NodeType.LIFESTYLE_BROCCOLI) {
+          ctx.save();
+          ctx.translate(nx, ny);
+          ctx.font = `${node.radius * 1.5}px sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('🥦', 0, 0);
+          ctx.restore();
+        } else if (node.type === NodeType.LIFESTYLE_GREEN_TEA) {
+          ctx.save();
+          ctx.translate(nx, ny);
+          ctx.font = `${node.radius * 1.5}px sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('🍵', 0, 0);
+          ctx.restore();
         } else if (node.type === NodeType.LIFESTYLE_SLEEP) {
           ctx.save();
           ctx.translate(nx, ny);
@@ -1339,6 +1355,30 @@ export const HeartGameCanvas: React.FC<HeartGameCanvasProps> = ({
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
           ctx.fillText('🏃‍♂️', 0, 0);
+          ctx.restore();
+        } else if (node.type === NodeType.LIFESTYLE_ENERGY_DRINK) {
+          ctx.save();
+          ctx.translate(nx, ny);
+          ctx.font = `${node.radius * 1.5}px sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('🥤', 0, 0);
+          ctx.restore();
+        } else if (node.type === NodeType.LIFESTYLE_SODA) {
+          ctx.save();
+          ctx.translate(nx, ny);
+          ctx.font = `${node.radius * 1.5}px sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('🍹', 0, 0);
+          ctx.restore();
+        } else if (node.type === NodeType.LIFESTYLE_SHISHA) {
+          ctx.save();
+          ctx.translate(nx, ny);
+          ctx.font = `${node.radius * 1.5}px sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('💨', 0, 0);
           ctx.restore();
         } else {
           // Standard electric disruption ring

@@ -372,20 +372,20 @@ export default function App() {
 
   // Helper to calculate Lifestyle stages configuration (1 to 100)
   const getLifestyleStageConfig = (lvl: number) => {
-    let targetScore = lvl * 15 + 100; // Phase 1: 1-30 (115 to 550)
+    let targetScore = lvl * 6 + 50; // Phase 1: 1-30 (56 to 230 - much more achievable and faster!)
     if (lvl >= 91) {
-      targetScore = lvl * 30 + 1000; // Phase 4 finale: 91-100 (3730 to 4000)
+      targetScore = lvl * 15 + 400; // Phase 4 finale: 91-100 (1765 to 1900 - fast final combat instead of 4000!)
     } else if (lvl >= 61) {
-      targetScore = lvl * 25 + 600; // Phase 3 danger zone: 61-90 (2125 to 2850)
+      targetScore = lvl * 10 + 350; // Phase 3 danger zone: 61-90 (960 to 1250 instead of 2850!)
     } else if (lvl >= 31) {
-      targetScore = lvl * 20 + 300; // Phase 2 intermediate: 31-60 (920 to 1500)
+      targetScore = lvl * 8 + 180; // Phase 2 intermediate: 31-60 (428 to 660 instead of 1500!)
     }
 
     const baseSpawnInterval = Math.max(
-      lvl >= 91 ? 520 : lvl >= 61 ? 680 : lvl >= 31 ? 850 : 1100,
-      2200 - (lvl * 25)
+      lvl >= 91 ? 380 : lvl >= 61 ? 500 : lvl >= 31 ? 650 : 800,
+      1700 - (lvl * 18)
     );
-    const baseSpeed = lvl >= 91 ? 0.95 + (lvl * 0.015) : lvl >= 61 ? 0.82 + (lvl * 0.012) : 0.7 + (lvl * 0.015);
+    const baseSpeed = lvl >= 91 ? 1.15 + (lvl * 0.015) : lvl >= 61 ? 1.0 + (lvl * 0.013) : 0.85 + (lvl * 0.015);
     return { targetScore, baseSpawnInterval, baseSpeed };
   };
 
@@ -1796,55 +1796,85 @@ export default function App() {
         
         if (lvl >= 91) {
           // Phase 4: Ultimate Chaos (91-100)
-          if (roll < 0.12) {
+          if (roll < 0.08) {
             type = NodeType.LIFESTYLE_DOUBLE_BURGER;
             color = '#ea580c';
             initialHealth = 2;
             speed = 1.35;
             radius = 18;
-          } else if (roll >= 0.12 && roll < 0.24) {
+          } else if (roll >= 0.08 && roll < 0.16) {
             type = NodeType.LIFESTYLE_DOUBLE_SALT;
             color = '#94a3b8';
             initialHealth = 2;
             speed = 1.45;
             radius = 16;
-          } else if (roll >= 0.24 && roll < 0.36) {
+          } else if (roll >= 0.16 && roll < 0.23) {
             type = NodeType.LIFESTYLE_SEDENTARY;
             color = '#9333ea';
             initialHealth = 3;
             speed = 0.95;
             radius = 19;
-          } else if (roll >= 0.36 && roll < 0.48) {
+          } else if (roll >= 0.23 && roll < 0.30) {
             type = NodeType.LIFESTYLE_LATE_NIGHT;
             color = '#6366f1';
             initialHealth = 1;
             speed = 1.75;
             radius = 14;
-          } else if (roll >= 0.48 && roll < 0.60) {
+          } else if (roll >= 0.30 && roll < 0.38) {
             type = NodeType.LIFESTYLE_CIGARETTE;
             color = '#dc2626';
             initialHealth = 1;
             speed = 1.8;
             radius = 13;
-          } else if (roll >= 0.60 && roll < 0.70) {
+          } else if (roll >= 0.38 && roll < 0.45) {
             type = NodeType.LIFESTYLE_STRESS;
             color = '#c084fc';
             initialHealth = 1;
             speed = 1.4;
             radius = 16;
-          } else if (roll >= 0.70 && roll < 0.78) {
+          } else if (roll >= 0.45 && roll < 0.52) {
+            type = NodeType.LIFESTYLE_SHISHA;
+            color = '#a855f7';
+            initialHealth = 2;
+            speed = 1.6;
+            radius = 15;
+          } else if (roll >= 0.52 && roll < 0.59) {
+            type = NodeType.LIFESTYLE_ENERGY_DRINK;
+            color = '#f43f5e';
+            initialHealth = 1;
+            speed = 1.7;
+            radius = 13;
+          } else if (roll >= 0.59 && roll < 0.66) {
+            type = NodeType.LIFESTYLE_SODA;
+            color = '#b45309';
+            initialHealth = 1;
+            speed = 1.5;
+            radius = 14;
+          } else if (roll >= 0.66 && roll < 0.73) {
             type = NodeType.LIFESTYLE_SLEEP;
             color = '#10b981';
             initialHealth = 1;
             speed = 1.1;
             radius = 15;
-          } else if (roll >= 0.78 && roll < 0.86) {
+          } else if (roll >= 0.73 && roll < 0.80) {
             type = NodeType.LIFESTYLE_EXERCISE;
             color = '#06b6d4';
             initialHealth = 1;
             speed = 1.2;
             radius = 15;
-          } else if (roll >= 0.86 && roll < 0.93) {
+          } else if (roll >= 0.80 && roll < 0.87) {
+            type = NodeType.LIFESTYLE_BROCCOLI;
+            color = '#15803d';
+            initialHealth = 1;
+            speed = 1.15;
+            radius = 14;
+          } else if (roll >= 0.87 && roll < 0.93) {
+            type = NodeType.LIFESTYLE_GREEN_TEA;
+            color = '#84cc16';
+            initialHealth = 1;
+            speed = 1.2;
+            radius = 13;
+          } else if (roll >= 0.93 && roll < 0.97) {
             type = NodeType.LIFESTYLE_APPLE;
             color = '#22c55e';
             initialHealth = 1;
@@ -1859,49 +1889,67 @@ export default function App() {
           }
         } else if (lvl >= 61) {
           // Phase 3: Stress & Smoking Zone (61-90)
-          if (roll < 0.12) {
+          if (roll < 0.10) {
             type = NodeType.LIFESTYLE_SEDENTARY;
             color = '#a855f7';
             initialHealth = 3;
             speed = 0.85;
             radius = 18;
-          } else if (roll >= 0.12 && roll < 0.25) {
+          } else if (roll >= 0.10 && roll < 0.20) {
             type = NodeType.LIFESTYLE_CIGARETTE;
             color = '#dc2626';
             initialHealth = 1;
             speed = 1.6;
             radius = 13;
-          } else if (roll >= 0.25 && roll < 0.38) {
+          } else if (roll >= 0.20 && roll < 0.30) {
+            type = NodeType.LIFESTYLE_SHISHA;
+            color = '#9333ea';
+            initialHealth = 1;
+            speed = 1.7;
+            radius = 14;
+          } else if (roll >= 0.30 && roll < 0.40) {
             type = NodeType.LIFESTYLE_STRESS;
             color = '#c084fc';
             initialHealth = 1;
             speed = 1.35;
             radius = 16;
-          } else if (roll >= 0.38 && roll < 0.50) {
+          } else if (roll >= 0.40 && roll < 0.50) {
             type = NodeType.LIFESTYLE_DOUBLE_SALT;
             color = '#94a3b8';
             initialHealth = 2;
             speed = 1.25;
             radius = 15;
-          } else if (roll >= 0.50 && roll < 0.62) {
+          } else if (roll >= 0.50 && roll < 0.58) {
             type = NodeType.LIFESTYLE_LATE_NIGHT;
             color = '#4f46e5';
             initialHealth = 1;
             speed = 1.6;
             radius = 13;
-          } else if (roll >= 0.62 && roll < 0.72) {
+          } else if (roll >= 0.58 && roll < 0.66) {
             type = NodeType.LIFESTYLE_EXERCISE;
             color = '#06b6d4';
             initialHealth = 1;
             speed = 1.1;
             radius = 14;
-          } else if (roll >= 0.72 && roll < 0.82) {
+          } else if (roll >= 0.66 && roll < 0.74) {
             type = NodeType.LIFESTYLE_SLEEP;
             color = '#10b981';
             initialHealth = 1;
             speed = 1.0;
             radius = 14;
-          } else if (roll >= 0.82 && roll < 0.91) {
+          } else if (roll >= 0.74 && roll < 0.82) {
+            type = NodeType.LIFESTYLE_BROCCOLI;
+            color = '#15803d';
+            initialHealth = 1;
+            speed = 1.05;
+            radius = 14;
+          } else if (roll >= 0.82 && roll < 0.89) {
+            type = NodeType.LIFESTYLE_GREEN_TEA;
+            color = '#84cc16';
+            initialHealth = 1;
+            speed = 1.1;
+            radius = 13;
+          } else if (roll >= 0.89 && roll < 0.94) {
             type = NodeType.LIFESTYLE_APPLE;
             color = '#22c55e';
             initialHealth = 1;
@@ -1916,43 +1964,61 @@ export default function App() {
           }
         } else if (lvl >= 31) {
           // Phase 2: Food & Health Challenges (31-60)
-          if (roll < 0.15) {
+          if (roll < 0.12) {
             type = NodeType.LIFESTYLE_DOUBLE_BURGER;
             color = '#ea580c';
             initialHealth = 2;
             speed = 1.15;
             radius = 17;
-          } else if (roll >= 0.15 && roll < 0.30) {
+          } else if (roll >= 0.12 && roll < 0.22) {
             type = NodeType.LIFESTYLE_LATE_NIGHT;
             color = '#4f46e5';
             initialHealth = 1;
             speed = 1.5;
             radius = 12;
-          } else if (roll >= 0.30 && roll < 0.44) {
+          } else if (roll >= 0.22 && roll < 0.32) {
             type = NodeType.LIFESTYLE_BURGER;
             color = '#f59e0b';
             initialHealth = 1;
             speed = 1.25;
             radius = 15;
-          } else if (roll >= 0.44 && roll < 0.58) {
+          } else if (roll >= 0.32 && roll < 0.42) {
             type = NodeType.LIFESTYLE_SALT;
             color = '#cbd5e1';
             initialHealth = 1;
             speed = 1.35;
             radius = 13;
-          } else if (roll >= 0.58 && roll < 0.70) {
+          } else if (roll >= 0.42 && roll < 0.50) {
+            type = NodeType.LIFESTYLE_ENERGY_DRINK;
+            color = '#ef4444';
+            initialHealth = 1;
+            speed = 1.5;
+            radius = 14;
+          } else if (roll >= 0.50 && roll < 0.58) {
+            type = NodeType.LIFESTYLE_SODA;
+            color = '#b45309';
+            initialHealth = 1;
+            speed = 1.4;
+            radius = 14;
+          } else if (roll >= 0.58 && roll < 0.67) {
             type = NodeType.LIFESTYLE_SLEEP;
             color = '#10b981';
             initialHealth = 1;
             speed = 1.0;
             radius = 14;
-          } else if (roll >= 0.70 && roll < 0.82) {
+          } else if (roll >= 0.67 && roll < 0.76) {
+            type = NodeType.LIFESTYLE_GREEN_TEA;
+            color = '#84cc16';
+            initialHealth = 1;
+            speed = 1.1;
+            radius = 13;
+          } else if (roll >= 0.76 && roll < 0.84) {
             type = NodeType.LIFESTYLE_APPLE;
             color = '#22c55e';
             initialHealth = 1;
             speed = 1.0;
             radius = 14;
-          } else if (roll >= 0.82 && roll < 0.91) {
+          } else if (roll >= 0.84 && roll < 0.92) {
             type = NodeType.LIFESTYLE_WATER;
             color = '#3b82f6';
             initialHealth = 1;
@@ -1967,19 +2033,31 @@ export default function App() {
           }
         } else {
           // Phase 1: Basic Habits (1-30)
-          if (roll < 0.25) {
+          if (roll < 0.20) {
             type = NodeType.LIFESTYLE_BURGER;
             color = '#f59e0b';
             initialHealth = 1;
             speed = 1.05;
             radius = 14;
-          } else if (roll >= 0.25 && roll < 0.50) {
+          } else if (roll >= 0.20 && roll < 0.35) {
             type = NodeType.LIFESTYLE_SALT;
             color = '#cbd5e1';
             initialHealth = 1;
             speed = 1.2;
             radius = 12;
-          } else if (roll >= 0.50 && roll < 0.75) {
+          } else if (roll >= 0.35 && roll < 0.45) {
+            type = NodeType.LIFESTYLE_SODA;
+            color = '#b45309';
+            initialHealth = 1;
+            speed = 1.25;
+            radius = 13;
+          } else if (roll >= 0.45 && roll < 0.60) {
+            type = NodeType.LIFESTYLE_BROCCOLI;
+            color = '#15803d';
+            initialHealth = 1;
+            speed = 1.0;
+            radius = 13;
+          } else if (roll >= 0.60 && roll < 0.75) {
             type = NodeType.LIFESTYLE_APPLE;
             color = '#22c55e';
             initialHealth = 1;
@@ -2627,7 +2705,9 @@ export default function App() {
         nodeToHit.type === NodeType.LIFESTYLE_APPLE || 
         nodeToHit.type === NodeType.LIFESTYLE_WATER ||
         nodeToHit.type === NodeType.LIFESTYLE_SLEEP ||
-        nodeToHit.type === NodeType.LIFESTYLE_EXERCISE;
+        nodeToHit.type === NodeType.LIFESTYLE_EXERCISE ||
+        nodeToHit.type === NodeType.LIFESTYLE_BROCCOLI ||
+        nodeToHit.type === NodeType.LIFESTYLE_GREEN_TEA;
 
       if (gameMode === 'LIFESTYLE') {
         if (isHealthyNode) {
@@ -2858,6 +2938,15 @@ export default function App() {
         } else if (missedNode.type === NodeType.LIFESTYLE_SEDENTARY) {
           dmg = 25;
           label = '📺 خمول وجلوس طويل خافض للنبض!';
+        } else if (missedNode.type === NodeType.LIFESTYLE_ENERGY_DRINK) {
+          dmg = 35;
+          label = '🥤 مشروب طاقة مجهد لضربات القلب!';
+        } else if (missedNode.type === NodeType.LIFESTYLE_SODA) {
+          dmg = 25;
+          label = '🍹 مشروب غازي يزيد العبء والسكريات!';
+        } else if (missedNode.type === NodeType.LIFESTYLE_SHISHA) {
+          dmg = 45;
+          label = '💨 دخان شيشة يمنع أكسجين الشرايين!';
         } else if (missedNode.type === NodeType.LIFESTYLE_APPLE) {
           dmg = -20; // Heals 1 life!
           isBenefit = true;
@@ -2868,6 +2957,16 @@ export default function App() {
           isBenefit = true;
           ptAdd = 20;
           label = '💧 إرتواء بالماء!';
+        } else if (missedNode.type === NodeType.LIFESTYLE_BROCCOLI) {
+          dmg = -22;
+          isBenefit = true;
+          ptAdd = 22;
+          label = '🥦 بروكلي يمنع تراكم الترسبات بالشرايين!';
+        } else if (missedNode.type === NodeType.LIFESTYLE_GREEN_TEA) {
+          dmg = -25;
+          isBenefit = true;
+          ptAdd = 25;
+          label = '🍵 شاي أخضر ينعش مضادات الأكسدة!';
         } else if (missedNode.type === NodeType.LIFESTYLE_SLEEP) {
           dmg = -30; // Heals 1.5 lives!
           isBenefit = true;
@@ -5466,8 +5565,8 @@ export default function App() {
                       })}
                     </div>
                     <div className="text-[10px] text-teal-400/80 leading-relaxed border-t border-teal-550/10 pt-1.5 mt-1">
-                      <div>🚨 <strong className="text-rose-450">دمّر بالضرب المباشر:</strong> برجر 🍔، ملح 🧂، سجائر 🚬، توتر 😰</div>
-                      <div className="mt-0.5">⭐ <strong className="text-emerald-400">اترك للقلب لتغذيته:</strong> تفاحة 🍎، ماء 💧</div>
+                      <div>🚨 <strong className="text-rose-450">دمّر بالضرب المباشر:</strong> برجر 🍔، ملح 🧂، سجائر 🚬، توتر 😰، طاقة 🥤، غازات 🍹، شيشة 💨</div>
+                      <div className="mt-0.5">⭐ <strong className="text-emerald-400">اترك للقلب لتغذيته:</strong> تفاحة 🍎، ماء 💧، بروكلي 🥦، شاي🍵</div>
                     </div>
                   </div>
                 )}

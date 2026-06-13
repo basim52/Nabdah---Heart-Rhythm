@@ -29,12 +29,17 @@ export enum NodeType {
   LIFESTYLE_STRESS = 'LIFESTYLE_STRESS',     // Stress (harmful lifestyle element)
   LIFESTYLE_APPLE = 'LIFESTYLE_APPLE',       // Apple (healthy lifestyle element)
   LIFESTYLE_WATER = 'LIFESTYLE_WATER',        // Water (healthy lifestyle element)
+  LIFESTYLE_BROCCOLI = 'LIFESTYLE_BROCCOLI',       // Broccoli (healthy lifestyle element)
+  LIFESTYLE_GREEN_TEA = 'LIFESTYLE_GREEN_TEA',     // Green Tea (healthy lifestyle element)
   LIFESTYLE_DOUBLE_BURGER = 'LIFESTYLE_DOUBLE_BURGER', // Double fat burger (2 hits, harmful)
   LIFESTYLE_DOUBLE_SALT = 'LIFESTYLE_DOUBLE_SALT',     // Double salt/sodium overdose (2 hits, harmful)
   LIFESTYLE_LATE_NIGHT = 'LIFESTYLE_LATE_NIGHT',       // Late nights/Sleeplessness (fast, zigzags, harmful)
   LIFESTYLE_SEDENTARY = 'LIFESTYLE_SEDENTARY',         // Lack of exercise/Couch potato (3 hits, grows bigger, harmful)
   LIFESTYLE_SLEEP = 'LIFESTYLE_SLEEP',                 // Adequate sleep (heals, gives points, healthy)
-  LIFESTYLE_EXERCISE = 'LIFESTYLE_EXERCISE'           // Sports & Exercise (gives big speed/points, healthy)
+  LIFESTYLE_EXERCISE = 'LIFESTYLE_EXERCISE',           // Sports & Exercise (gives big speed/points, healthy)
+  LIFESTYLE_ENERGY_DRINK = 'LIFESTYLE_ENERGY_DRINK',   // Energy Drink (harmful lifestyle element)
+  LIFESTYLE_SODA = 'LIFESTYLE_SODA',                   // Soda/Pepsi (harmful lifestyle element)
+  LIFESTYLE_SHISHA = 'LIFESTYLE_SHISHA'                // Shisha/Smoking (harmful lifestyle element)
 }
 
 export interface GameNode {
