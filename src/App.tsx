@@ -168,6 +168,18 @@ export default function App() {
   const [practiceTimer, setPracticeTimer] = useState<number>(0);
   const [practiceStatusMessage, setPracticeStatusMessage] = useState<string>('');
 
+  // Motivational features: programs/plans and daily spin
+  const [totalWorkouts, setTotalWorkouts] = useState<number>(0);
+  const [ironHeartClaimed, setIronHeartClaimed] = useState<boolean>(false);
+  const [superArteriesClaimed, setSuperArteriesClaimed] = useState<boolean>(false);
+  const [oxygenTankClaimed, setOxygenTankClaimed] = useState<boolean>(false);
+  const [lastSpinDate, setLastSpinDate] = useState<string>('');
+  const [spinCompletedWorkouts, setSpinCompletedWorkouts] = useState<number>(0);
+  const [gymTab, setGymTab] = useState<'EXERCISES' | 'PLANS' | 'WHEEL'>('EXERCISES');
+  const [isSpinning, setIsSpinning] = useState<boolean>(false);
+  const [spinAnimationDegree, setSpinAnimationDegree] = useState<number>(0);
+  const [spinRewardMsg, setSpinRewardMsg] = useState<string>('');
+
   // Arabic Heart Safety Tips (≤ 4 words) - For displaying non-disruptive medical tips between levels
   const HEART_TIPS = [
     "مارس الرياضة يومياً 🏃‍♂️",
@@ -525,11 +537,25 @@ export default function App() {
     const localSwimmingLvl = parseInt(localStorage.getItem('nabdah_swimming_lvl') || '1', 10);
     const localStrengthLvl = parseInt(localStorage.getItem('nabdah_strength_lvl') || '1', 10);
 
+    const localWorkouts = parseInt(localStorage.getItem('nabdah_total_workouts') || '0', 10);
+    const localIHClaimed = localStorage.getItem('nabdah_iron_heart_claimed') === 'true';
+    const localSAClaimed = localStorage.getItem('nabdah_super_arteries_claimed') === 'true';
+    const localOTClaimed = localStorage.getItem('nabdah_oxygen_tank_claimed') === 'true';
+    const localSpinDate = localStorage.getItem('nabdah_last_spin_date') || '';
+    const localSpinWkCount = parseInt(localStorage.getItem('nabdah_spin_wk_count') || '0', 10);
+
     setGymPoints(isNaN(localGymPoints) ? 0 : localGymPoints);
     setSprintLevel(isNaN(localSprintLvl) ? 1 : localSprintLvl);
     setCyclingLevel(isNaN(localCyclingLvl) ? 1 : localCyclingLvl);
     setSwimmingLevel(isNaN(localSwimmingLvl) ? 1 : localSwimmingLvl);
     setStrengthLevel(isNaN(localStrengthLvl) ? 1 : localStrengthLvl);
+
+    setTotalWorkouts(isNaN(localWorkouts) ? 0 : localWorkouts);
+    setIronHeartClaimed(localIHClaimed);
+    setSuperArteriesClaimed(localSAClaimed);
+    setOxygenTankClaimed(localOTClaimed);
+    setLastSpinDate(localSpinDate);
+    setSpinCompletedWorkouts(isNaN(localSpinWkCount) ? 0 : localSpinWkCount);
   }, []);
 
   const saveGymProgress = async (pt: number, spr: number, cyc: number, swi: number, str: number) => {
@@ -563,6 +589,161 @@ export default function App() {
     }
   };
 
+  const saveMotivationProgress = async (
+    workouts: number,
+    ihClaimed: boolean,
+    saClaimed: boolean,
+    otClaimed: boolean,
+    spinDate: string,
+    spinWkCount: number
+  ) => {
+    localStorage.setItem('nabdah_total_workouts', String(workouts));
+    localStorage.setItem('nabdah_iron_heart_claimed', String(ihClaimed));
+    localStorage.setItem('nabdah_super_arteries_claimed', String(saClaimed));
+    localStorage.setItem('nabdah_oxygen_tank_claimed', String(otClaimed));
+    localStorage.setItem('nabdah_last_spin_date', spinDate);
+    localStorage.setItem('nabdah_spin_wk_count', String(spinWkCount));
+
+    setTotalWorkouts(workouts);
+    setIronHeartClaimed(ihClaimed);
+    setSuperArteriesClaimed(saClaimed);
+    setOxygenTankClaimed(otClaimed);
+    setLastSpinDate(spinDate);
+    setSpinCompletedWorkouts(spinWkCount);
+
+    if (auth.currentUser) {
+      const userRef = doc(db, 'users', auth.currentUser.uid);
+      try {
+        await setDoc(userRef, {
+          totalWorkouts: workouts,
+          ironHeartClaimed: ihClaimed,
+          superArteriesClaimed: saClaimed,
+          oxygenTankClaimed: otClaimed,
+          lastSpinDate: spinDate,
+          spinCompletedWorkouts: spinWkCount,
+          updatedAt: serverTimestamp()
+        }, { merge: true });
+      } catch (e) {
+        console.error("Failed to sync motivation progress to Firebase:", e);
+      }
+    }
+  };
+
+  const claimPlanReward = async (plan: 'IRON' | 'ARTERIES' | 'OXYGEN') => {
+    let xpAward = 0;
+    let nextIHC = ironHeartClaimed;
+    let nextSAC = superArteriesClaimed;
+    let nextOTC = oxygenTankClaimed;
+
+    if (plan === 'IRON') {
+      if (totalWorkouts < 5 || ironHeartClaimed) return;
+      xpAward = 100;
+      nextIHC = true;
+    } else if (plan === 'ARTERIES') {
+      if (sprintLevel < 3 || cyclingLevel < 3 || superArteriesClaimed) return;
+      xpAward = 200;
+      nextSAC = true;
+    } else if (plan === 'OXYGEN') {
+      if (swimmingLevel < 4 || strengthLevel < 4 || oxygenTankClaimed) return;
+      xpAward = 300;
+      nextOTC = true;
+    }
+
+    if (xpAward > 0) {
+      audioSynthRef.current.playPerfectSound();
+      const updatedPoints = gymPoints + xpAward;
+      setGymPoints(updatedPoints);
+      
+      // Save Gym Points first
+      localStorage.setItem('nabdah_gym_points', String(updatedPoints));
+      if (auth.currentUser) {
+        try {
+          await setDoc(doc(db, 'users', auth.currentUser.uid), {
+            gymPoints: updatedPoints
+          }, { merge: true });
+        } catch (e) {
+          console.error(e);
+        }
+      }
+
+      // Save Plan Claims
+      await saveMotivationProgress(totalWorkouts, nextIHC, nextSAC, nextOTC, lastSpinDate, spinCompletedWorkouts);
+      spawnFloatingText(1, `🎉 استلام مكافأة الخطة بنجاح! +${xpAward} XP`, 190, 150, '#eab308', true);
+    }
+  };
+
+  const handleDailySpin = async () => {
+    if (isSpinning) return;
+    
+    const todayStr = new Date().toDateString();
+    const isDateLocked = lastSpinDate === todayStr;
+    const isWorkoutUnlocked = spinCompletedWorkouts >= 2;
+    
+    if (isDateLocked && !isWorkoutUnlocked) {
+      audioSynthRef.current.playHitSound();
+      return;
+    }
+
+    setIsSpinning(true);
+    setSpinRewardMsg('جاري تدوير شرايين الحماس... 🎡');
+    
+    let ticks = 0;
+    const interval = setInterval(() => {
+      audioSynthRef.current.playHitSound();
+      setSpinRewardMsg(`جاري الدوران... 🤸‍♂️ ${['💖', '⚡', '🚴‍♂️', '🏊‍♂️', '🏋️‍♂️'][ticks % 5]}`);
+      ticks++;
+      if (ticks >= 12) {
+        clearInterval(interval);
+      }
+    }, 120);
+
+    setTimeout(async () => {
+      const rand = Math.random();
+      let xpAward = 20;
+      let rewardName = '20 XP ⚡ (نبضة حيوية خفيفة)';
+      let quote = 'الرياضة اليومية تحسن أداء الشرايين وتزيد من تدفق الدم النقي! 🏃‍♂️';
+
+      if (rand < 0.4) {
+        xpAward = 20;
+        rewardName = '20 XP ⚡ (نبضة حيوية خفيفة)';
+        quote = 'الرياضة اليومية تحسن أداء الشرايين وتزيد من تدفق الدم النقي! 🏃‍♂️';
+      } else if (rand < 0.7) {
+        xpAward = 40;
+        rewardName = '40 XP 💖 (شريان ذهبي معافى)';
+        quote = 'قلوب من حديد! السعرات الحرارية المحروقة تبني صماماً فولاذياً للوقاية 🚴‍♂️';
+      } else if (rand < 0.9) {
+        xpAward = 60;
+        rewardName = '60 XP 🏅 (استشفاء القلب السريع)';
+        quote = 'تدريب السباحة والأكسجين ينظف الأوعية الدموية من الكوليسترول الضار! 🏊‍♂️';
+      } else {
+        xpAward = 80;
+        rewardName = '80 XP 🎁 (النبضة الخارقة لقوة دكتور نبضة!)';
+        quote = 'أنت وحش رياضي! ضخ دماءك بقوة كافية لتبتسم كرات الدم الحمراء حماساً! 🏋️‍♂️';
+      }
+
+      const updatedPoints = gymPoints + xpAward;
+      setGymPoints(updatedPoints);
+      
+      localStorage.setItem('nabdah_gym_points', String(updatedPoints));
+      if (auth.currentUser) {
+        try {
+          await setDoc(doc(db, 'users', auth.currentUser.uid), {
+            gymPoints: updatedPoints
+          }, { merge: true });
+        } catch (e) {
+          console.error(e);
+        }
+      }
+
+      await saveMotivationProgress(totalWorkouts, ironHeartClaimed, superArteriesClaimed, oxygenTankClaimed, todayStr, 0);
+
+      audioSynthRef.current.playPerfectSound();
+      spawnFloatingText(1, `🎁 ربحت من عجلة الحماس: +${xpAward} XP`, 190, 150, '#eab308', true);
+      setSpinRewardMsg(`🎉 مبروك! لقد ربحت: ${rewardName}\n\n💡 نصيحة نبضة الذهبية: ${quote}`);
+      setIsSpinning(false);
+    }, 1800);
+  };
+
   const handleGymExerciseSuccess = (type: 'SPRINT' | 'CYCLING' | 'SWIMMING' | 'STRENGTH') => {
     let nextSprint = sprintLevel;
     let nextCycling = cyclingLevel;
@@ -592,6 +773,11 @@ export default function App() {
 
     // Save progress
     saveGymProgress(nextPoints, nextSprint, nextCycling, nextSwimming, nextStrength);
+
+    // Increment motivational stats
+    const nextTotalWorkouts = totalWorkouts + 1;
+    const nextSpinWorkouts = spinCompletedWorkouts + 1;
+    saveMotivationProgress(nextTotalWorkouts, ironHeartClaimed, superArteriesClaimed, oxygenTankClaimed, lastSpinDate, nextSpinWorkouts);
 
     setPracticeStatusMessage(`🎉 أحسنت! ارتفع مستوى تمرين ${exerciseName} إلى المستوى ${type === 'SPRINT' ? nextSprint : type === 'CYCLING' ? nextCycling : type === 'SWIMMING' ? nextSwimming : nextStrength}!`);
 
@@ -699,6 +885,32 @@ export default function App() {
             localStorage.setItem('nabdah_swimming_lvl', String(finalSwimmingLvl));
             localStorage.setItem('nabdah_strength_lvl', String(finalStrengthLvl));
 
+            // Motivation variables DB fetch & merge
+            const dbTotalWorkouts = userData.totalWorkouts || 0;
+            const dbIronHeartClaimed = userData.ironHeartClaimed || false;
+            const dbSuperArteriesClaimed = userData.superArteriesClaimed || false;
+            const dbOxygenTankClaimed = userData.oxygenTankClaimed || false;
+            const dbLastSpinDate = userData.lastSpinDate || '';
+            const dbSpinWkCount = userData.spinCompletedWorkouts || 0;
+
+            const localWorkouts = parseInt(localStorage.getItem('nabdah_total_workouts') || '0', 10);
+            const finalWorkouts = Math.max(dbTotalWorkouts, isNaN(localWorkouts) ? 0 : localWorkouts);
+
+            const finalIHClaimed = dbIronHeartClaimed || localStorage.getItem('nabdah_iron_heart_claimed') === 'true';
+            const finalSAClaimed = dbSuperArteriesClaimed || localStorage.getItem('nabdah_super_arteries_claimed') === 'true';
+            const finalOTClaimed = dbOxygenTankClaimed || localStorage.getItem('nabdah_oxygen_tank_claimed') === 'true';
+
+            const finalSpinDate = dbLastSpinDate || localStorage.getItem('nabdah_last_spin_date') || '';
+            const localSpinWkCount = parseInt(localStorage.getItem('nabdah_spin_wk_count') || '0', 10);
+            const finalSpinWkCount = Math.max(dbSpinWkCount, isNaN(localSpinWkCount) ? 0 : localSpinWkCount);
+
+            localStorage.setItem('nabdah_total_workouts', String(finalWorkouts));
+            localStorage.setItem('nabdah_iron_heart_claimed', String(finalIHClaimed));
+            localStorage.setItem('nabdah_super_arteries_claimed', String(finalSAClaimed));
+            localStorage.setItem('nabdah_oxygen_tank_claimed', String(finalOTClaimed));
+            localStorage.setItem('nabdah_last_spin_date', finalSpinDate);
+            localStorage.setItem('nabdah_spin_wk_count', String(finalSpinWkCount));
+
             // Set React level state
             setMaxUnlockedLevel(finalMax);
             setMaxUnlockedLifestyleLevel(finalMaxLifestyle);
@@ -709,6 +921,13 @@ export default function App() {
             setCyclingLevel(finalCyclingLvl);
             setSwimmingLevel(finalSwimmingLvl);
             setStrengthLevel(finalStrengthLvl);
+
+            setTotalWorkouts(finalWorkouts);
+            setIronHeartClaimed(finalIHClaimed);
+            setSuperArteriesClaimed(finalSAClaimed);
+            setOxygenTankClaimed(finalOTClaimed);
+            setLastSpinDate(finalSpinDate);
+            setSpinCompletedWorkouts(finalSpinWkCount);
 
             // Update database if local has different or newer progress
             if (
@@ -732,6 +951,12 @@ export default function App() {
                 cyclingLevel: finalCyclingLvl,
                 swimmingLevel: finalSwimmingLvl,
                 strengthLevel: finalStrengthLvl,
+                totalWorkouts: finalWorkouts,
+                ironHeartClaimed: finalIHClaimed,
+                superArteriesClaimed: finalSAClaimed,
+                oxygenTankClaimed: finalOTClaimed,
+                lastSpinDate: finalSpinDate,
+                spinCompletedWorkouts: finalSpinWkCount,
                 updatedAt: serverTimestamp()
               });
             }
@@ -3684,128 +3909,402 @@ export default function App() {
 
               {gymPracticeType === 'NONE' ? (
                 <>
-                  {/* Gym Info with Stats */}
-                  <div className="bg-gradient-to-br from-red-950/20 to-slate-900 border border-white/5 rounded-2xl p-4 flex flex-col gap-3 relative">
-                    <div className="flex justify-between items-center">
-                      <span className="text-xs font-mono text-amber-400 bg-amber-500/10 px-2.5 py-1 rounded-lg font-black">{gymPoints} XP</span>
-                      <span className="text-xs text-white/50 font-bold">مجموع نقاط اللياقة البدنية:</span>
-                    </div>
-                    <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
-                      <div className="h-full bg-gradient-to-r from-red-500 to-amber-400" style={{ width: `${Math.min(100, (gymPoints % 100))}%` }} />
-                    </div>
-                    <p className="text-[10.5px] text-white/60 leading-relaxed font-sans">
-                      كلما تدربت بالداخل، ازدادت نقاط اللياقة وزادت مستويات التمرين. توفر التمارين قوة هائلة وحصانة نبضية ضد الآفات والأمراض في كافة أطوار اللعب والزمالة!
-                    </p>
+                  {/* Gym Sub-Tabs Navigation */}
+                  <div className="flex border-b border-white/10 p-0.5 gap-1 bg-white/5 rounded-xl">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        audioSynthRef.current.playPerfectSound();
+                        setGymTab('WHEEL');
+                      }}
+                      className={`flex-1 py-1.5 text-[10.5px] font-black rounded-lg transition-all text-center flex items-center justify-center gap-1 cursor-pointer ${
+                        gymTab === 'WHEEL'
+                          ? 'bg-gradient-to-r from-red-650 to-amber-600 text-white shadow'
+                          : 'text-white/60 hover:text-white hover:bg-white/5'
+                      }`}
+                    >
+                      <Sparkles className="w-3.5 h-3.5" />
+                      <span>عجلة الحماس 🎡</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        audioSynthRef.current.playPerfectSound();
+                        setGymTab('PLANS');
+                      }}
+                      className={`flex-1 py-1.5 text-[10.5px] font-black rounded-lg transition-all text-center flex items-center justify-center gap-1 cursor-pointer ${
+                        gymTab === 'PLANS'
+                          ? 'bg-gradient-to-r from-red-650 to-amber-600 text-white shadow'
+                          : 'text-white/60 hover:text-white hover:bg-white/5'
+                      }`}
+                    >
+                      <Trophy className="w-3.5 h-3.5" />
+                      <span>خطط وتحديات التحفيز 🎯</span>
+                      {(!ironHeartClaimed && totalWorkouts >= 5) || 
+                       (!superArteriesClaimed && sprintLevel >= 3 && cyclingLevel >= 3) || 
+                       (!oxygenTankClaimed && swimmingLevel >= 4 && strengthLevel >= 4) ? (
+                        <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-ping" />
+                      ) : null}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        audioSynthRef.current.playPerfectSound();
+                        setGymTab('EXERCISES');
+                      }}
+                      className={`flex-1 py-1.5 text-[10.5px] font-black rounded-lg transition-all text-center flex items-center justify-center gap-1 cursor-pointer ${
+                        gymTab === 'EXERCISES'
+                          ? 'bg-gradient-to-r from-red-650 to-amber-600 text-white shadow'
+                          : 'text-white/60 hover:text-white hover:bg-white/5'
+                      }`}
+                    >
+                      <Dumbbell className="w-3.5 h-3.5" />
+                      <span>التمارين المتاحة 🏋️‍♂️</span>
+                    </button>
                   </div>
 
-                  {/* Sports list */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    
-                    {/* SPRINT CARD */}
-                    <div className="bg-white/5 border border-white/10 hover:border-red-500/30 rounded-2xl p-3.5 flex flex-col justify-between gap-3 text-right group transition-all">
-                      <div className="flex justify-between items-start">
-                        <span className="text-[10px] text-red-400 font-bold">المستوى {sprintLevel} ⭐</span>
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-xs font-bold text-white">الجري السريع 🏃‍♂️</span>
+                  {gymTab === 'EXERCISES' && (
+                    <>
+                      {/* Gym Info with Stats */}
+                      <div className="bg-gradient-to-br from-red-950/20 to-slate-900 border border-white/5 rounded-2xl p-4 flex flex-col gap-3 relative text-right">
+                        <div className="flex justify-between items-center">
+                          <span className="text-xs font-mono text-amber-400 bg-amber-500/10 px-2.5 py-1 rounded-lg font-black">{gymPoints} XP</span>
+                          <span className="text-xs text-white/50 font-bold">مجموع نقاط اللياقة البدنية:</span>
+                        </div>
+                        <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
+                          <div className="h-full bg-gradient-to-r from-red-500 to-amber-400" style={{ width: `${Math.min(100, (gymPoints % 100))}%` }} />
+                        </div>
+                        <p className="text-[10.5px] text-white/60 leading-relaxed font-sans">
+                          كلما تدربت بالداخل، ازدادت نقاط اللياقة وزادت مستويات التمرين. توفر التمارين قوة هائلة وحصانة نبضية ضد الآفات والأمراض في كافة أطوار اللعب والزمالة!
+                        </p>
+                      </div>
+
+                      {/* Sports list */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-right">
+                        
+                        {/* SPRINT CARD */}
+                        <div className="bg-white/5 border border-white/10 hover:border-red-500/30 rounded-2xl p-3.5 flex flex-col justify-between gap-3 text-right group transition-all">
+                          <div className="flex justify-between items-start">
+                            <span className="text-[10px] text-red-400 font-bold">المستوى {sprintLevel} ⭐</span>
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-xs font-bold text-white">الجري السريع 🏃‍♂️</span>
+                            </div>
+                          </div>
+                          <p className="text-[9.5px] text-white/50 leading-relaxed font-sans">
+                            يقوي عضلة القلب ويقلل الضرر والوهن الصحي بنسبة <span className="text-red-400">-{Math.round((1 - Math.max(0.4, 1 - (sprintLevel * 0.12))) * 100)}%</span> في كافة المراحل!
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              audioSynthRef.current.playPerfectSound();
+                              setGymPracticeType('SPRINT');
+                              setPracticeProgress(0);
+                              setPracticeTimer(5);
+                              setPracticeStatusMessage('اضغط بسرعة قصوى لمحاكاة الجري وسحق الدهون وسد الشرايين! 🏃‍♂️');
+                            }}
+                            className="w-full bg-red-650 hover:bg-red-550 text-white font-extrabold py-2 px-3 rounded-lg text-[10.5px] transition-all cursor-pointer"
+                          >
+                            بدء تمرين الجري السريع 🔥
+                          </button>
+                        </div>
+
+                        {/* CYCLING CARD */}
+                        <div className="bg-white/5 border border-white/10 hover:border-amber-500/30 rounded-2xl p-3.5 flex flex-col justify-between gap-3 text-right group transition-all">
+                          <div className="flex justify-between items-start">
+                            <span className="text-[10px] text-amber-400 font-bold">المستوى {cyclingLevel} ⭐</span>
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-xs font-bold text-white">دراجة اللياقة 🚴‍♂️</span>
+                            </div>
+                          </div>
+                          <p className="text-[9.5px] text-white/50 leading-relaxed font-sans">
+                            يزيد من كفاءة الدورة الدموية ومفعول منظم النبض بنسبة <span className="text-amber-400 font-bold">+{Math.round(cyclingLevel * 30)}%</span> من الثواني التباطئية!
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              audioSynthRef.current.playPerfectSound();
+                              setGymPracticeType('CYCLING');
+                              setPracticeProgress(0);
+                              setPracticeTimer(5);
+                              setPracticeStatusMessage('اضغط على الدواسات بسرعة واملأ السرعة والضربات! 🚴‍♂️');
+                            }}
+                            className="w-full bg-amber-600 hover:bg-amber-500 text-white font-extrabold py-2 px-3 rounded-lg text-[10.5px] transition-all cursor-pointer"
+                          >
+                            بدء دراجة التحمل 🔥
+                          </button>
+                        </div>
+
+                        {/* SWIMMING CARD */}
+                        <div className="bg-white/5 border border-white/10 hover:border-sky-500/30 rounded-2xl p-3.5 flex flex-col justify-between gap-3 text-right group transition-all">
+                          <div className="flex justify-between items-start">
+                            <span className="text-[10px] text-sky-450 font-bold">المستوى {swimmingLevel} ⭐</span>
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-xs font-bold text-white">السباحة الرئوية 🏊‍♂️</span>
+                            </div>
+                          </div>
+                          <p className="text-[9.5px] text-white/50 leading-relaxed font-sans">
+                            يضاعف سعة الأكسجين ويرفع استشفاء الأوعية من الأدرينالين والأغذية بنسبة <span className="text-sky-450 font-bold">+{Math.round(swimmingLevel * 25)}%</span>!
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              audioSynthRef.current.playPerfectSound();
+                              setGymPracticeType('SWIMMING');
+                              setPracticeProgress(40); // lungs depth starts middle
+                              setPracticeTimer(6);
+                              setPracticeStatusMessage('اضغط على التنفس عندما يتطابق المؤشر في المنطقة الخضراء! 🏊‍♂️');
+                            }}
+                            className="w-full bg-sky-600/90 hover:bg-sky-500 text-white font-extrabold py-2 px-3 rounded-lg text-[10.5px] transition-all cursor-pointer"
+                          >
+                            بدء تدريب السباحة والأكسجين 🔥
+                          </button>
+                        </div>
+
+                        {/* STRENGTH CARD */}
+                        <div className="bg-white/5 border border-white/10 hover:border-purple-500/30 rounded-2xl p-3.5 flex flex-col justify-between gap-3 text-right group transition-all">
+                          <div className="flex justify-between items-start">
+                            <span className="text-[10px] text-purple-400 font-bold">المستوى {strengthLevel} ⭐</span>
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-xs font-bold text-white">رفع الأثقال والتطهير 🏋️‍♂️</span>
+                            </div>
+                          </div>
+                          <p className="text-[9.5px] text-white/50 leading-relaxed font-sans">
+                            يمنح قلبك قدرة سحق الخثرات والآفات المتراكمة بنبضة واحدة! يلحق <span className="text-purple-400 font-bold">+{strengthLevel} ضرر</span> نقري إضافي!
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              audioSynthRef.current.playPerfectSound();
+                              setGymPracticeType('STRENGTH');
+                              setPracticeProgress(0);
+                              setPracticeTimer(5);
+                              setPracticeStatusMessage('اضغط لرفع الثقل الثقيل فوق رأس دكتور نبضة! 🏋️‍♂️');
+                            }}
+                            className="w-full bg-purple-650 hover:bg-purple-550 text-white font-extrabold py-2 px-3 rounded-lg text-[10.5px] transition-all cursor-pointer"
+                          >
+                            بدء رفع الأثقال الحديدية 🔥
+                          </button>
+                        </div>
+
+                      </div>
+                    </>
+                  )}
+
+                  {gymTab === 'PLANS' && (
+                    <div className="flex flex-col gap-4 text-right">
+                      
+                      {/* Section Title */}
+                      <div className="p-3 bg-red-950/20 border border-red-500/20 rounded-2xl text-right">
+                        <h4 className="text-xs font-black text-red-400 font-display">خُطط وبرامج اللياقة لتعزيز دافعية قلبك 🎯</h4>
+                        <p className="text-[10px] text-white/70 mt-1 leading-relaxed">
+                          أكمل التحديات التالية لتثبت جدارتك الرياضية أمام دكتور نبضة وتحصل على مكافآت ضخمة من نقاط اللياقة (XP)!
+                        </p>
+                      </div>
+
+                      {/* PLAN 1 */}
+                      <div className="bg-white/5 border border-white/10 rounded-2xl p-3.5 text-right space-y-2 flex flex-col justify-between">
+                        <div className="flex justify-between items-start">
+                          <span className="text-[9px] text-amber-400 font-bold bg-amber-500/15 px-2 py-0.5 rounded-md">مكافأة: +100 XP 🏆</span>
+                          <span className="text-xs font-black text-white">1. خطة "شرايين صقر نبضة" للمبتدئين 🦅</span>
+                        </div>
+                        <p className="text-[10px] text-white/50 leading-relaxed">
+                          الشرط: تنفيذ 5 تمارين متكاملة داخل صالة نبضة الرياضية لاكتساب الروتين الرياضي.
+                        </p>
+                        
+                        {/* Progress Bar */}
+                        <div className="space-y-1">
+                          <div className="flex justify-between text-[9px] text-white/45 font-mono">
+                            <span>{Math.round((Math.min(5, totalWorkouts) / 5) * 100)}%</span>
+                            <span>التقدم الحالي: {Math.min(5, totalWorkouts)} / 5 تمارين</span>
+                          </div>
+                          <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
+                            <div className="h-full bg-emerald-505 rounded-full transition-all" style={{ width: `${(Math.min(5, totalWorkouts) / 5) * 100}%` }} />
+                          </div>
+                        </div>
+
+                        {ironHeartClaimed ? (
+                          <div className="text-center py-1.5 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] rounded-lg font-bold">
+                            الخطة مكتملة وتم تسليم مكافأتك بنجاح! 🎉
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            disabled={totalWorkouts < 5}
+                            onClick={() => claimPlanReward('IRON')}
+                            className={`w-full py-2 font-black rounded-lg text-xs transition-all cursor-pointer ${
+                              totalWorkouts >= 5
+                                ? 'bg-amber-500 hover:bg-amber-400 text-slate-950 animate-pulse font-extrabold shadow-[0_0_10px_rgba(245,158,11,0.4)]'
+                                : 'bg-white/5 text-white/30 border border-white/5 cursor-not-allowed'
+                            }`}
+                          >
+                            {totalWorkouts >= 5 ? 'استلام مكافأة الخطة! 🎁' : 'الخطة غير جاهزة بعد 🔒'}
+                          </button>
+                        )}
+                      </div>
+
+                      {/* PLAN 2 */}
+                      <div className="bg-white/5 border border-white/10 rounded-2xl p-3.5 text-right space-y-2 flex flex-col justify-between">
+                        <div className="flex justify-between items-start">
+                          <span className="text-[9px] text-amber-400 font-bold bg-amber-500/15 px-2 py-0.5 rounded-md">مكافأة: +200 XP 🏆</span>
+                          <span className="text-xs font-black text-white">2. خطة "القلب والدوران الفولاذي" 💖</span>
+                        </div>
+                        <p className="text-[10px] text-white/50 leading-relaxed">
+                          الشرط: الوصول بالمستوى التدريبي للجري والدراجة إلى المستوى 3 أو أعلى لتعزيز القوة العضلية الدافعة.
+                        </p>
+                        
+                        {/* Progress Grid */}
+                        <div className="grid grid-cols-2 gap-2 text-[9px] text-white/60 font-sans">
+                          <div className="bg-white/5 p-1.5 rounded-lg border border-white/5 text-center">
+                            الجري: {sprintLevel}/3 {sprintLevel >= 3 ? '✅' : '❌'}
+                          </div>
+                          <div className="bg-white/5 p-1.5 rounded-lg border border-white/5 text-center">
+                            الدراجة: {cyclingLevel}/3 {cyclingLevel >= 3 ? '✅' : '❌'}
+                          </div>
+                        </div>
+
+                        {superArteriesClaimed ? (
+                          <div className="text-center py-1.5 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] rounded-lg font-bold">
+                            الخطة مكتملة وتم تسليم مكافأتك بنجاح! 🎉
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            disabled={sprintLevel < 3 || cyclingLevel < 3}
+                            onClick={() => claimPlanReward('ARTERIES')}
+                            className={`w-full py-2 font-black rounded-lg text-xs transition-all cursor-pointer ${
+                              sprintLevel >= 3 && cyclingLevel >= 3
+                                ? 'bg-amber-500 hover:bg-amber-400 text-slate-950 animate-pulse font-extrabold shadow-[0_0_10px_rgba(245,158,11,0.4)]'
+                                : 'bg-white/5 text-white/30 border border-white/5 cursor-not-allowed'
+                            }`}
+                          >
+                            {sprintLevel >= 3 && cyclingLevel >= 3 ? 'استلام مكافأة الخطة! 🎁' : 'الخطة غير جاهزة بعد 🔒'}
+                          </button>
+                        )}
+                      </div>
+
+                      {/* PLAN 3 */}
+                      <div className="bg-white/5 border border-white/10 rounded-2xl p-3.5 text-right space-y-2 flex flex-col justify-between">
+                        <div className="flex justify-between items-start">
+                          <span className="text-[9px] text-amber-400 font-bold bg-amber-500/15 px-2 py-0.5 rounded-md">مكافأة: +300 XP 🏆</span>
+                          <span className="text-xs font-black text-white">3. برنامج "أوكسجين الشرايين النقي" الخارق 🏊‍♂️</span>
+                        </div>
+                        <p className="text-[10px] text-white/50 leading-relaxed">
+                          الشرط: وصول مستويات السباحة وقوة رفع الأثقال وتطهير الشرايين إلى المستوى 4 أو أعلى.
+                        </p>
+                        
+                        {/* Progress Grid */}
+                        <div className="grid grid-cols-2 gap-2 text-[9px] text-white/60 font-sans">
+                          <div className="bg-white/5 p-1.5 rounded-lg border border-white/5 text-center">
+                            السباحة: {swimmingLevel}/4 {swimmingLevel >= 4 ? '✅' : '❌'}
+                          </div>
+                          <div className="bg-white/5 p-1.5 rounded-lg border border-white/5 text-center">
+                            رفع الأثقال: {strengthLevel}/4 {strengthLevel >= 4 ? '✅' : '❌'}
+                          </div>
+                        </div>
+
+                        {oxygenTankClaimed ? (
+                          <div className="text-center py-1.5 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] rounded-lg font-bold">
+                            الخطة مكتملة وتم تسليم مكافأتك بنجاح! 🎉
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            disabled={swimmingLevel < 4 || strengthLevel < 4}
+                            onClick={() => claimPlanReward('OXYGEN')}
+                            className={`w-full py-2 font-black rounded-lg text-xs transition-all cursor-pointer ${
+                              swimmingLevel >= 4 && strengthLevel >= 4
+                                ? 'bg-amber-500 hover:bg-amber-400 text-slate-950 animate-pulse font-extrabold shadow-[0_0_10px_rgba(245,158,11,0.4)]'
+                                : 'bg-white/5 text-white/30 border border-white/5 cursor-not-allowed'
+                            }`}
+                          >
+                            {swimmingLevel >= 4 && strengthLevel >= 4 ? 'استلام مكافأة الخطة! 🎁' : 'الخطة غير جاهزة بعد 🔒'}
+                          </button>
+                        )}
+                      </div>
+
+                    </div>
+                  )}
+
+                  {gymTab === 'WHEEL' && (
+                    <div className="flex flex-col gap-4 items-center">
+                      
+                      {/* Explanatory Banner */}
+                      <div className="p-3 bg-gradient-to-r from-red-950/20 to-slate-900 border border-white/5 rounded-2xl text-right w-full">
+                        <h4 className="text-xs font-black text-amber-400 font-display">عجلة الحماس اليومي للقلب والشرايين 🎡</h4>
+                        <p className="text-[10px] text-white/70 mt-1 leading-relaxed">
+                          قم بتدوير العجلة مرة واحدة يومياً، أو <span className="text-amber-400 font-bold">أكمل تمرينين (2) متتاليين</span> في الصالة لفك القفل فوراً وإعادة التدوير!
+                        </p>
+                      </div>
+
+                      {/* Spinner Graphic Representation */}
+                      <div className="relative w-44 h-44 rounded-full border-4 border-amber-500/30 shadow-[0_0_30px_rgba(245,158,11,0.15)] flex items-center justify-center overflow-hidden my-2 bg-slate-900">
+                        {/* Wheel sectors rotation */}
+                        <div 
+                          className="absolute inset-0 transition-transform duration-[1800ms] ease-out rounded-full grid grid-cols-2 grid-rows-2"
+                          style={{ transform: `rotate(${spinAnimationDegree}deg)` }}
+                        >
+                          <div className="bg-red-650/40 border border-white/10 flex items-center justify-center font-black text-[12px] text-red-400">💖 80 XP</div>
+                          <div className="bg-amber-650/40 border border-white/10 flex items-center justify-center font-black text-[12px] text-amber-400">⚡ 40 XP</div>
+                          <div className="bg-sky-650/40 border border-white/10 flex items-center justify-center font-black text-[12px] text-sky-450">🏅 60 XP</div>
+                          <div className="bg-slate-800/60 border border-white/10 flex items-center justify-center font-black text-[12px] text-white/40">✨ 20 XP</div>
+                        </div>
+
+                        {/* Spinner Arrow pointer indicator */}
+                        <div className="absolute top-1 z-20 text-lg animate-bounce select-none">👇</div>
+
+                        {/* Spinner inner hub */}
+                        <div className="w-12 h-12 bg-slate-950 border border-amber-500/50 rounded-full flex items-center justify-center z-10 shadow">
+                          <Sparkles className="w-5 h-5 text-amber-400 animate-spin" />
                         </div>
                       </div>
-                      <p className="text-[9.5px] text-white/50 leading-relaxed font-sans">
-                        يقوي عضلة القلب ويقلل الضرر والوهن الصحي بنسبة <span className="text-red-400">-{Math.round((1 - Math.max(0.4, 1 - (sprintLevel * 0.12))) * 100)}%</span> في كافة المراحل!
-                      </p>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          audioSynthRef.current.playPerfectSound();
-                          setGymPracticeType('SPRINT');
-                          setPracticeProgress(0);
-                          setPracticeTimer(5);
-                          setPracticeStatusMessage('اضغط بسرعة قصوى لمحاكاة الجري وسحق الدهون وسد الشرايين! 🏃‍♂️');
-                        }}
-                        className="w-full bg-red-650 hover:bg-red-550 text-white font-extrabold py-2 px-3 rounded-lg text-[10.5px] transition-all cursor-pointer"
-                      >
-                        بدء تمرين الجري السريع 🔥
-                      </button>
-                    </div>
 
-                    {/* CYCLING CARD */}
-                    <div className="bg-white/5 border border-white/10 hover:border-amber-500/30 rounded-2xl p-3.5 flex flex-col justify-between gap-3 text-right group transition-all">
-                      <div className="flex justify-between items-start">
-                        <span className="text-[10px] text-amber-400 font-bold">المستوى {cyclingLevel} ⭐</span>
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-xs font-bold text-white">دراجة اللياقة 🚴‍♂️</span>
+                      {/* Last Spin parameters */}
+                      <div className="text-center w-full space-y-1.5 p-2.5 bg-white/5 border border-white/10 rounded-xl">
+                        <div className="flex justify-between items-center text-[10px] text-white/60 px-1">
+                          <span className="font-bold text-amber-400 font-mono">{spinCompletedWorkouts} / 2</span>
+                          <span>التمارين المكتملة منذ آخر دوران:</span>
                         </div>
-                      </div>
-                      <p className="text-[9.5px] text-white/50 leading-relaxed font-sans">
-                        يزيد من كفاءة الدورة الدموية ومفعول منظم النبض بنسبة <span className="text-amber-400 font-bold">+{Math.round(cyclingLevel * 30)}%</span> من الثواني التباطئية!
-                      </p>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          audioSynthRef.current.playPerfectSound();
-                          setGymPracticeType('CYCLING');
-                          setPracticeProgress(0);
-                          setPracticeTimer(5);
-                          setPracticeStatusMessage('اضغط على الدواسات بسرعة واملأ السرعة والضربات! 🚴‍♂️');
-                        }}
-                        className="w-full bg-amber-600 hover:bg-amber-500 text-white font-extrabold py-2 px-3 rounded-lg text-[10.5px] transition-all cursor-pointer"
-                      >
-                        بدء دراجة التحمل 🔥
-                      </button>
-                    </div>
-
-                    {/* SWIMMING CARD */}
-                    <div className="bg-white/5 border border-white/10 hover:border-sky-500/30 rounded-2xl p-3.5 flex flex-col justify-between gap-3 text-right group transition-all">
-                      <div className="flex justify-between items-start">
-                        <span className="text-[10px] text-sky-450 font-bold">المستوى {swimmingLevel} ⭐</span>
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-xs font-bold text-white">السباحة الرئوية 🏊‍♂️</span>
+                        <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
+                          <div className="h-full bg-amber-500" style={{ width: `${Math.min(100, (spinCompletedWorkouts / 2) * 100)}%` }} />
                         </div>
+                        {lastSpinDate === new Date().toDateString() && spinCompletedWorkouts < 2 ? (
+                          <p className="text-[9.5px] text-amber-400/90 font-bold mt-1 text-center font-sans">
+                            تم تدوير العجلة مؤخراً اليوم. أكمل {2 - spinCompletedWorkouts} تمارين إضافية لإعادة فك القفل فورياً! 🔥
+                          </p>
+                        ) : (
+                          <p className="text-[9.5px] text-emerald-400 font-bold mt-1 text-center">
+                            العجلة جاهزة للدوران والتحفيز الآن! 🎉
+                          </p>
+                        )}
                       </div>
-                      <p className="text-[9.5px] text-white/50 leading-relaxed font-sans">
-                        يضاعف سعة الأكسجين ويرفع استشفاء الأوعية من الأدرينالين والأغذية بنسبة <span className="text-sky-450 font-bold">+{Math.round(swimmingLevel * 25)}%</span>!
-                      </p>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          audioSynthRef.current.playPerfectSound();
-                          setGymPracticeType('SWIMMING');
-                          setPracticeProgress(40); // lungs depth starts middle
-                          setPracticeTimer(6);
-                          setPracticeStatusMessage('اضغط على التنفس عندما يتطابق المؤشر في المنطقة الخضراء! 🏊‍♂️');
-                        }}
-                        className="w-full bg-sky-600/90 hover:bg-sky-500 text-white font-extrabold py-2 px-3 rounded-lg text-[10.5px] transition-all cursor-pointer"
-                      >
-                        بدء تدريب السباحة والأكسجين 🔥
-                      </button>
-                    </div>
 
-                    {/* STRENGTH CARD */}
-                    <div className="bg-white/5 border border-white/10 hover:border-purple-500/30 rounded-2xl p-3.5 flex flex-col justify-between gap-3 text-right group transition-all">
-                      <div className="flex justify-between items-start">
-                        <span className="text-[10px] text-purple-400 font-bold">المستوى {strengthLevel} ⭐</span>
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-xs font-bold text-white">رفع الأثقال والتطهير 🏋️‍♂️</span>
+                      {/* Spinner Button and messaging */}
+                      {spinRewardMsg && (
+                        <div className="p-3 bg-white/5 border border-white/10 rounded-xl text-center text-[10.5px] text-white/80 leading-relaxed font-sans whitespace-pre-line w-full">
+                          {spinRewardMsg}
                         </div>
-                      </div>
-                      <p className="text-[9.5px] text-white/50 leading-relaxed font-sans">
-                        يمنح قلبك قدرة سحق الخثرات والآفات المتراكمة بنبضة واحدة! يلحق <span className="text-purple-400 font-bold">+{strengthLevel} ضرر</span> نقري إضافي!
-                      </p>
+                      )}
+
                       <button
                         type="button"
-                        onClick={() => {
-                          audioSynthRef.current.playPerfectSound();
-                          setGymPracticeType('STRENGTH');
-                          setPracticeProgress(0);
-                          setPracticeTimer(5);
-                          setPracticeStatusMessage('اضغط لرفع الثقل الثقيل فوق رأس دكتور نبضة! 🏋️‍♂️');
-                        }}
-                        className="w-full bg-purple-650 hover:bg-purple-550 text-white font-extrabold py-2 px-3 rounded-lg text-[10.5px] transition-all cursor-pointer"
+                        disabled={isSpinning || (lastSpinDate === new Date().toDateString() && spinCompletedWorkouts < 2)}
+                        onClick={handleDailySpin}
+                        className={`w-full py-2.5 font-black rounded-lg text-xs transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                          isSpinning
+                            ? 'bg-amber-600/30 text-white/45 cursor-wait'
+                            : (lastSpinDate === new Date().toDateString() && spinCompletedWorkouts < 2)
+                            ? 'bg-white/5 text-white/30 border border-white/5 cursor-not-allowed'
+                            : 'bg-gradient-to-r from-red-600 to-amber-500 hover:from-red-500 hover:to-amber-400 text-white font-extrabold animate-pulse shadow-[0_0_15px_rgba(239,68,68,0.35)]'
+                        }`}
                       >
-                        بدء رفع الأثقال الحديدية 🔥
+                        <Sparkles className="w-4 h-4 text-white" />
+                        <span>{isSpinning ? 'جاري دوران شرايين القلب...' : 'تدوير شرايين وعجلة الحماس! 🎡'}</span>
                       </button>
-                    </div>
 
-                  </div>
+                    </div>
+                  )}
                 </>
               ) : (
                 /* ACTIVE MINI GAME MODULE inside modal */
