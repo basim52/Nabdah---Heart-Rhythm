@@ -20,7 +20,7 @@ interface HeartGameCanvasProps {
   onMissNode: (id: string) => void;
   isPaused: boolean;
   currentLevel?: number;
-  gameMode?: 'ENDLESS' | 'TIMED' | 'LEVELS';
+  gameMode?: 'ENDLESS' | 'TIMED' | 'LEVELS' | 'LIFESTYLE';
 }
 
 export const HeartGameCanvas: React.FC<HeartGameCanvasProps> = ({
@@ -1243,6 +1243,102 @@ export const HeartGameCanvas: React.FC<HeartGameCanvasProps> = ({
           ctx.arc(0, 0, r * 0.22, 0, Math.PI * 2);
           ctx.fill();
           
+          ctx.restore();
+        } else if (node.type === NodeType.LIFESTYLE_BURGER) {
+          ctx.save();
+          ctx.translate(nx, ny);
+          ctx.font = `${node.radius * 1.5}px sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('🍔', 0, 0);
+          ctx.restore();
+        } else if (node.type === NodeType.LIFESTYLE_DOUBLE_BURGER) {
+          ctx.save();
+          ctx.translate(nx, ny);
+          ctx.font = `${node.radius * 1.5}px sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('🍔🍔', 0, 0);
+          ctx.restore();
+        } else if (node.type === NodeType.LIFESTYLE_SALT) {
+          ctx.save();
+          ctx.translate(nx, ny);
+          ctx.font = `${node.radius * 1.5}px sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('🧂', 0, 0);
+          ctx.restore();
+        } else if (node.type === NodeType.LIFESTYLE_DOUBLE_SALT) {
+          ctx.save();
+          ctx.translate(nx, ny);
+          ctx.font = `${node.radius * 1.5}px sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('🧂🧂', 0, 0);
+          ctx.restore();
+        } else if (node.type === NodeType.LIFESTYLE_CIGARETTE) {
+          ctx.save();
+          ctx.translate(nx, ny);
+          ctx.font = `${node.radius * 1.5}px sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('🚬', 0, 0);
+          ctx.restore();
+        } else if (node.type === NodeType.LIFESTYLE_STRESS) {
+          ctx.save();
+          ctx.translate(nx, ny);
+          ctx.font = `${node.radius * 1.5}px sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('😰', 0, 2);
+          ctx.restore();
+        } else if (node.type === NodeType.LIFESTYLE_LATE_NIGHT) {
+          ctx.save();
+          ctx.translate(nx, ny);
+          ctx.font = `${node.radius * 1.5}px sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('🌙', 0, 0);
+          ctx.restore();
+        } else if (node.type === NodeType.LIFESTYLE_SEDENTARY) {
+          ctx.save();
+          ctx.translate(nx, ny);
+          ctx.font = `${node.radius * 1.5}px sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('📺', 0, 0);
+          ctx.restore();
+        } else if (node.type === NodeType.LIFESTYLE_APPLE) {
+          ctx.save();
+          ctx.translate(nx, ny);
+          ctx.font = `${node.radius * 1.5}px sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('🍎', 0, 0);
+          ctx.restore();
+        } else if (node.type === NodeType.LIFESTYLE_WATER) {
+          ctx.save();
+          ctx.translate(nx, ny);
+          ctx.font = `${node.radius * 1.5}px sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('💧', 0, 0);
+          ctx.restore();
+        } else if (node.type === NodeType.LIFESTYLE_SLEEP) {
+          ctx.save();
+          ctx.translate(nx, ny);
+          ctx.font = `${node.radius * 1.5}px sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('😴', 0, 0);
+          ctx.restore();
+        } else if (node.type === NodeType.LIFESTYLE_EXERCISE) {
+          ctx.save();
+          ctx.translate(nx, ny);
+          ctx.font = `${node.radius * 1.5}px sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('🏃‍♂️', 0, 0);
           ctx.restore();
         } else {
           // Standard electric disruption ring

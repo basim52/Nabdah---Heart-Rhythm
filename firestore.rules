@@ -35,7 +35,7 @@ service cloud.firestore {
       allow list: if isSignedIn(); // Allow searching registered players
       allow create: if isSignedIn() && isOwner(userId) && isValidId(userId) && isValidUserProfile(incoming()) && incoming().updatedAt == request.time;
       allow update: if isSignedIn() && isOwner(userId) && isValidId(userId) && isValidUserProfile(incoming()) && incoming().updatedAt == request.time && (
-        incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt', 'displayName', 'photoURL', 'maxUnlockedLevel', 'completedLevels'])
+        incoming().diff(existing()).affectedKeys().hasOnly(['uid', 'email', 'status', 'updatedAt', 'displayName', 'photoURL', 'maxUnlockedLevel', 'completedLevels', 'maxUnlockedLifestyleLevel', 'completedLifestyleLevels', 'gymPoints', 'sprintLevel', 'cyclingLevel', 'swimmingLevel', 'strengthLevel'])
       );
     }
 
@@ -45,8 +45,15 @@ service cloud.firestore {
         && (!('displayName' in data) || (data.displayName is string && data.displayName.size() <= 80))
         && (!('photoURL' in data) || (data.photoURL is string && data.photoURL.size() <= 1000))
         && (!('status' in data) || data.status in ['online', 'offline', 'ingame'])
-        && (!('maxUnlockedLevel' in data) || (data.maxUnlockedLevel is int || data.maxUnlockedLevel is float))
-        && (!('completedLevels' in data) || data.completedLevels is list);
+        && (!('maxUnlockedLevel' in data) || (data.maxUnlockedLevel is int || data.maxUnlockedLevel is float || data.maxUnlockedLevel is number))
+        && (!('completedLevels' in data) || data.completedLevels is list)
+        && (!('maxUnlockedLifestyleLevel' in data) || (data.maxUnlockedLifestyleLevel is int || data.maxUnlockedLifestyleLevel is float || data.maxUnlockedLifestyleLevel is number))
+        && (!('completedLifestyleLevels' in data) || data.completedLifestyleLevels is list)
+        && (!('gymPoints' in data) || (data.gymPoints is int || data.gymPoints is float || data.gymPoints is number))
+        && (!('sprintLevel' in data) || (data.sprintLevel is int || data.sprintLevel is float || data.sprintLevel is number))
+        && (!('cyclingLevel' in data) || (data.cyclingLevel is int || data.cyclingLevel is float || data.cyclingLevel is number))
+        && (!('swimmingLevel' in data) || (data.swimmingLevel is int || data.swimmingLevel is float || data.swimmingLevel is number))
+        && (!('strengthLevel' in data) || (data.strengthLevel is int || data.strengthLevel is float || data.strengthLevel is number));
     }
 
     // Friendships Entity Collection Rules

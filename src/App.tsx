@@ -29,7 +29,9 @@ import {
   Loader2,
   X,
   Sparkles,
-  RefreshCw
+  RefreshCw,
+  Dumbbell,
+  Flame
 } from 'lucide-react';
 import { GameNode, HitParticle, FloatingText, NodeType, GameState, ScoreRecord } from './types';
 import { AudioSynthesizer } from './AudioSynthesizer';
@@ -124,14 +126,19 @@ export default function App() {
   // Visual effects (Player 1 & Shared UI)
   const [screenShake, setScreenShake] = useState<boolean>(false);
   const [screenShake2, setScreenShake2] = useState<boolean>(false);
+  const [screenBlur, setScreenBlur] = useState<boolean>(false);
   const [beatScale, setBeatScale] = useState<number>(1.0);
   const [showBeatIndicator, setShowBeatIndicator] = useState<boolean>(false); // Beats visual halo
   const [triggerBeatSign, setTriggerBeatSign] = useState<boolean>(false); // Triggers EKG spike
   const [triggerBeatSign2, setTriggerBeatSign2] = useState<boolean>(false); // Triggers Player 2 EKG spike
   const [volume, setVolume] = useState<number>(0.6);
 
-  // Single Player Game Modes (Endless vs Timed Challenge vs Levels)
-  const [gameMode, setGameMode] = useState<'ENDLESS' | 'TIMED' | 'LEVELS'>('ENDLESS');
+  // Single Player Game Modes (Endless vs Timed Challenge vs Levels vs Lifestyle)
+  const [gameMode, setGameMode] = useState<'ENDLESS' | 'TIMED' | 'LEVELS' | 'LIFESTYLE'>('ENDLESS');
+  const [currentCampaign, setCurrentCampaign] = useState<'MEDICAL' | 'LIFESTYLE'>('MEDICAL');
+  const [selectedCampaignTab, setSelectedCampaignTab] = useState<'MEDICAL' | 'LIFESTYLE'>('MEDICAL');
+  const [maxUnlockedLifestyleLevel, setMaxUnlockedLifestyleLevel] = useState<number>(1);
+  const [completedLifestyleLevels, setCompletedLifestyleLevels] = useState<number[]>([]);
   const [timeLeft, setTimeLeft] = useState<number>(60);
   const [isTimeOutEnd, setIsTimeOutEnd] = useState<boolean>(false);
   const [currentLevel, setCurrentLevel] = useState<number>(1);
@@ -140,6 +147,26 @@ export default function App() {
   const [showLevelsView, setShowLevelsView] = useState<boolean>(false);
   const [activeLevelTab, setActiveLevelTab] = useState<'CLASSIC' | 'MUTATED' | 'VASCULAR' | 'CARDIAC'>('CLASSIC');
   const [selectedLevelInfo, setSelectedLevelInfo] = useState<number | null>(null);
+
+  // Interactive Cardio Gym & Active Exercise Boosters (صالة تعزيز اللياقة وقوة القلب)
+  const [isGymOpen, setIsGymOpen] = useState<boolean>(false);
+  const [gymPoints, setGymPoints] = useState<number>(0);
+  const [sprintLevel, setSprintLevel] = useState<number>(1);
+  const [cyclingLevel, setCyclingLevel] = useState<number>(1);
+  const [swimmingLevel, setSwimmingLevel] = useState<number>(1);
+  const [strengthLevel, setStrengthLevel] = useState<number>(1);
+
+  // Active status of boosters
+  const [cardioSprintActive, setCardioSprintActive] = useState<boolean>(true);
+  const [cyclingActive, setCyclingActive] = useState<boolean>(true);
+  const [swimmingActive, setSwimmingActive] = useState<boolean>(true);
+  const [strengthActive, setStrengthActive] = useState<boolean>(true);
+
+  // Active micro-training mini-game states inside the Gym
+  const [gymPracticeType, setGymPracticeType] = useState<'NONE' | 'SPRINT' | 'CYCLING' | 'SWIMMING' | 'STRENGTH'>('NONE');
+  const [practiceProgress, setPracticeProgress] = useState<number>(0);
+  const [practiceTimer, setPracticeTimer] = useState<number>(0);
+  const [practiceStatusMessage, setPracticeStatusMessage] = useState<string>('');
 
   // Arabic Heart Safety Tips (≤ 4 words) - For displaying non-disruptive medical tips between levels
   const HEART_TIPS = [
@@ -331,6 +358,85 @@ export default function App() {
     };
   };
 
+  // Helper to calculate Lifestyle stages configuration (1 to 100)
+  const getLifestyleStageConfig = (lvl: number) => {
+    let targetScore = lvl * 15 + 100; // Phase 1: 1-30 (115 to 550)
+    if (lvl >= 91) {
+      targetScore = lvl * 30 + 1000; // Phase 4 finale: 91-100 (3730 to 4000)
+    } else if (lvl >= 61) {
+      targetScore = lvl * 25 + 600; // Phase 3 danger zone: 61-90 (2125 to 2850)
+    } else if (lvl >= 31) {
+      targetScore = lvl * 20 + 300; // Phase 2 intermediate: 31-60 (920 to 1500)
+    }
+
+    const baseSpawnInterval = Math.max(
+      lvl >= 91 ? 520 : lvl >= 61 ? 680 : lvl >= 31 ? 850 : 1100,
+      2200 - (lvl * 25)
+    );
+    const baseSpeed = lvl >= 91 ? 0.95 + (lvl * 0.015) : lvl >= 61 ? 0.82 + (lvl * 0.012) : 0.7 + (lvl * 0.015);
+    return { targetScore, baseSpawnInterval, baseSpeed };
+  };
+
+  const getLifestyleStageDescription = (lvl: number) => {
+    if (lvl === 100) {
+      return {
+        title: "العمر المديد والصحة الذهبية المستدامة (المستوى 100!) 👑🥗🧘‍♂️",
+        threats: "عاصفة مدمجة من كافة السموم والوجبات السريعة والسهر والتوتر العالي بوجبات مزدوجة!",
+        speed: "سرعة ونشاط عالي جداً 🩺📈⚡",
+        desc: "المرحلة المئوية الختامية الكبرى لتحدي نمط الحياة! جميع العادات الضارة تظهر والقلب يحتاج لنظام دعم صارم ورعاية دقيقة. انتصر في هذه المحطة لتكسب وسام 'ملك الرعاية الوقائية وسفير الحياة الملهمة'!"
+      };
+    }
+    if (lvl >= 91) {
+      return {
+        title: `نهائي الاستقرار والتعافي الكامل لنمط الحياة - مستوى ${lvl} 🏥🕊️`,
+        threats: "هجمات سريعة من ثنائيات البرجر 🍔🍔 والملح الزائد 🧂🧂 والتوخي والتهرب من التمارين 📺 والسهر 🌙!",
+        speed: "نبضات حياة متسارعة 🏃‍♂️💨",
+        desc: "أنت الآن في محطة التشافي المتكاملة! تحرّك بسرعة لحظر العادات الضارة ودع الأكلات الصحية والماء والنوم الكافي يغذون الشرايين لتستقر ضربات القلب في مواجهة ضغوطات الحياة اليومية الشائكة."
+      };
+    }
+    if (lvl === 90) {
+      return {
+        title: "حظر التوتر وهدم السهر المزمن (مرحلة التحدي الأعظم 90) 😰🚫⚔️",
+        threats: "كميات مكدسة للغاية من السهر 🌙 الخمول المفرط 📺 والتدخين الكثيف 🚬 والتوتر المطبق 😰!",
+        speed: "وتيرة قاسية ومجهدة 🌋⚡💥",
+        desc: "مستوى ذروة التحدي لنمط الحياة! شرايين القلب تعاني من الخمول التام والتوتر العالي؛ صفي ذهنك وحطم العادات القاتلة وادعم القلب بالهواء المتجدد والنوم العميق لتجاوز أزمة التوتر المزمن وإنقاذ نبض الشرايين."
+      };
+    }
+    if (lvl >= 61) {
+      return {
+        title: `حملة مواجهة الخمول والسموم - مستوى ${lvl} 📺🚭🧂`,
+        threats: "تأثير خمول الشاشة والجلوس الطويل 📺 والتدخين السام 🚬 والملح المزدوج 🧂🧂!",
+        speed: "صعوبة تصاعدية ملحوظة ⚠️⚡",
+        desc: "أصبحت العادات الضارة تظهر بقوة وثوب هجومي مستمر! خمول التلفاز 📺 يقلل مرونة الصمامات ويستدعي 3 ضربات سريعة لتفتيته. استمر في التغذية بالماء والأبقاء على الرياضة نشطة لحرق الكوليسترول الضار!"
+      };
+    }
+    if (lvl === 60) {
+      return {
+        title: "مقاومة وجبات البرجر العملاقة المكدسة (تحدي مستوى 60) 🍔🍔💣",
+        threats: "تتابع سريع من ثنائيات البرجر 🍔🍔 والصلصات وصدمات السهر والسكر 🧂 وشبح التدخين 🚬!",
+        speed: "تحدي إيقاعي حرج 🔥🍔",
+        desc: "أنت على مشارف المرحلة الستين الفاصلة! الوجبات الدسمة الثنائية 🍔🍔 تبطئ الحركة وتحجر الشرايين وتتطلب نقرتين متتاليتين لتفكيكها وتجنب انسداد صمامات القلب الكبرى. قاوم بشدة وافسح للشرايين طريقتها الصحية!"
+      };
+    }
+    if (lvl >= 31) {
+      return {
+        title: `تحديات التغذية المتوازنة والمقاومة - مستوى ${lvl} 🍎🥗🍔`,
+        threats: "وجبات دسمة مكررة 🍔🍔، ملح زائد 🧂🧂، تدخين مبدئي 🚬 وضغوطات روتينية 😰!",
+        speed: "صدمات إيقاعية متوسطة ⚡",
+        desc: "المرحلة المتوسطة تطلق العنان لوحش العادات اليومية الخانقة. تبدأ ثنائيات البرجر بالظهور مع السهر القاتل 🌙. حافظ على مخزون الفيتامينات والماء ونظّم إيقاع يومك للمحافظة على ضغط وتوازن الشرايين."
+      };
+    }
+    if (lvl >= 1) {
+      return {
+        title: `تطهير الأساسيات وبناء العادات - مستوى ${lvl} 🍏💧🍔`,
+        threats: "تسلل وجبات البرجر 🍔، رشات صوديوم 🧂، وتأثير خفيف من التوتر والضغوط اليومية 😰.",
+        speed: "إيقاع معتدل وتعليمي 🧘‍♂️🍏",
+        desc: "مرحلة ترحيبية دافئة لمساعدتك على فكّ شيفرة نمط الحياة الصحي. تجنب لمس الوجبات والملح الضار واسمح للتفاح 🍎 والماء 💧 بدخول مجرى الدم لتغذية النسيج العضلي وإنعاش الحيوية."
+      };
+    }
+    return { title: "", threats: "", speed: "", desc: "" };
+  };
+
   // Pacemaker dynamic stabilization effect (Option 1)
   const [stabilizationTimeLeft, setStabilizationTimeLeft] = useState<number>(0);
   const stabilizationActiveRef = useRef<boolean>(false);
@@ -380,6 +486,21 @@ export default function App() {
         setMaxUnlockedLevel(parsed);
       }
     }
+    const rawLvlLife = localStorage.getItem('nabdah_max_unlocked_lifestyle_level_v1');
+    if (rawLvlLife) {
+      const parsedLife = parseInt(rawLvlLife, 10);
+      if (!isNaN(parsedLife) && parsedLife >= 1 && parsedLife <= 100) {
+        setMaxUnlockedLifestyleLevel(parsedLife);
+      }
+    }
+    try {
+      const rawCompLife = localStorage.getItem('nabdah_completed_lifestyle_levels_v1');
+      if (rawCompLife) {
+        setCompletedLifestyleLevels(JSON.parse(rawCompLife));
+      }
+    } catch (e) {
+      console.error("Lifestyle completed levels load failed", e);
+    }
   }, []);
 
   // Update user status in database helper
@@ -394,6 +515,90 @@ export default function App() {
         handleFirestoreError(e, OperationType.UPDATE, `users/${auth.currentUser.uid}`);
       }
     }
+  };
+
+  // Standalone effect to load Gym details for offline/unauthenticated startup
+  useEffect(() => {
+    const localGymPoints = parseInt(localStorage.getItem('nabdah_gym_points') || '0', 10);
+    const localSprintLvl = parseInt(localStorage.getItem('nabdah_sprint_lvl') || '1', 10);
+    const localCyclingLvl = parseInt(localStorage.getItem('nabdah_cycling_lvl') || '1', 10);
+    const localSwimmingLvl = parseInt(localStorage.getItem('nabdah_swimming_lvl') || '1', 10);
+    const localStrengthLvl = parseInt(localStorage.getItem('nabdah_strength_lvl') || '1', 10);
+
+    setGymPoints(isNaN(localGymPoints) ? 0 : localGymPoints);
+    setSprintLevel(isNaN(localSprintLvl) ? 1 : localSprintLvl);
+    setCyclingLevel(isNaN(localCyclingLvl) ? 1 : localCyclingLvl);
+    setSwimmingLevel(isNaN(localSwimmingLvl) ? 1 : localSwimmingLvl);
+    setStrengthLevel(isNaN(localStrengthLvl) ? 1 : localStrengthLvl);
+  }, []);
+
+  const saveGymProgress = async (pt: number, spr: number, cyc: number, swi: number, str: number) => {
+    localStorage.setItem('nabdah_gym_points', String(pt));
+    localStorage.setItem('nabdah_sprint_lvl', String(spr));
+    localStorage.setItem('nabdah_cycling_lvl', String(cyc));
+    localStorage.setItem('nabdah_swimming_lvl', String(swi));
+    localStorage.setItem('nabdah_strength_lvl', String(str));
+
+    setGymPoints(pt);
+    setSprintLevel(spr);
+    setCyclingLevel(cyc);
+    setSwimmingLevel(swi);
+    setStrengthLevel(str);
+
+    if (auth.currentUser) {
+      const userRef = doc(db, 'users', auth.currentUser.uid);
+      try {
+        await setDoc(userRef, {
+          gymPoints: pt,
+          sprintLevel: spr,
+          cyclingLevel: cyc,
+          swimmingLevel: swi,
+          strengthLevel: str,
+          updatedAt: serverTimestamp()
+        }, { merge: true });
+      } catch (e) {
+        console.error("Failed to sync gym progress to Firebase: ", e);
+        handleFirestoreError(e, OperationType.WRITE, `users/${auth.currentUser.uid}`);
+      }
+    }
+  };
+
+  const handleGymExerciseSuccess = (type: 'SPRINT' | 'CYCLING' | 'SWIMMING' | 'STRENGTH') => {
+    let nextSprint = sprintLevel;
+    let nextCycling = cyclingLevel;
+    let nextSwimming = swimmingLevel;
+    let nextStrength = strengthLevel;
+    let nextPoints = gymPoints + 25;
+
+    let exerciseName = '';
+    if (type === 'SPRINT') {
+      nextSprint = sprintLevel + 1;
+      exerciseName = 'الجري السريع 🏃‍♂️';
+    } else if (type === 'CYCLING') {
+      nextCycling = cyclingLevel + 1;
+      exerciseName = 'ركوب الدراجة 🚴‍♂️';
+    } else if (type === 'SWIMMING') {
+      nextSwimming = swimmingLevel + 1;
+      exerciseName = 'السباحة والأكسجين 🏊‍♂️';
+    } else if (type === 'STRENGTH') {
+      nextStrength = strengthLevel + 1;
+      exerciseName = 'رفع الأثقال وتطهير الشرايين 🏋️‍♂️';
+    }
+
+    audioSynthRef.current.playPerfectSound();
+    
+    // Spawn gorgeous floating text
+    spawnFloatingText(1, `💪 ممارسة ${exerciseName} بنجاح! +25 XP`, 190, 150, '#eab308', true);
+
+    // Save progress
+    saveGymProgress(nextPoints, nextSprint, nextCycling, nextSwimming, nextStrength);
+
+    setPracticeStatusMessage(`🎉 أحسنت! ارتفع مستوى تمرين ${exerciseName} إلى المستوى ${type === 'SPRINT' ? nextSprint : type === 'CYCLING' ? nextCycling : type === 'SWIMMING' ? nextSwimming : nextStrength}!`);
+
+    // Set short timeout then return back to main list
+    setTimeout(() => {
+      setGymPracticeType('NONE');
+    }, 2000);
   };
 
   // 1. Google Auth & User Profile tracking
@@ -426,7 +631,16 @@ export default function App() {
             const dbMax = userData.maxUnlockedLevel || 1;
             const dbCompleted: number[] = userData.completedLevels || [];
 
-            // Read from local storage
+            const dbMaxLifestyle = userData.maxUnlockedLifestyleLevel || 1;
+            const dbCompletedLifestyle: number[] = userData.completedLifestyleLevels || [];
+
+            const dbGymPoints = userData.gymPoints || 0;
+            const dbSprintLevel = userData.sprintLevel || 1;
+            const dbCyclingLevel = userData.cyclingLevel || 1;
+            const dbSwimmingLevel = userData.swimmingLevel || 1;
+            const dbStrengthLevel = userData.strengthLevel || 1;
+
+            // Read from local storage (Medical)
             const localMaxStr = localStorage.getItem('nabdah_max_unlocked_level_v1');
             const localMax = localMaxStr ? parseInt(localMaxStr, 10) : 1;
             const finalMax = Math.max(dbMax, isNaN(localMax) ? 1 : localMax);
@@ -441,18 +655,83 @@ export default function App() {
             const mergedSet = new Set([...dbCompleted, ...localCompleted]);
             const finalCompleted = Array.from(mergedSet).filter(lvl => !isNaN(lvl) && lvl >= 1 && lvl <= 100);
 
+            // Read from local storage (Lifestyle)
+            const localMaxLifestyleStr = localStorage.getItem('nabdah_max_unlocked_lifestyle_level_v1');
+            const localMaxLifestyle = localMaxLifestyleStr ? parseInt(localMaxLifestyleStr, 10) : 1;
+            const finalMaxLifestyle = Math.max(dbMaxLifestyle, isNaN(localMaxLifestyle) ? 1 : localMaxLifestyle);
+
+            let localCompletedLifestyle: number[] = [];
+            try {
+              localCompletedLifestyle = JSON.parse(localStorage.getItem('nabdah_completed_lifestyle_levels_v1') || '[]');
+            } catch (e) {
+              console.error(e);
+            }
+
+            const mergedSetLifestyle = new Set([...dbCompletedLifestyle, ...localCompletedLifestyle]);
+            const finalCompletedLifestyle = Array.from(mergedSetLifestyle).filter(lvl => !isNaN(lvl) && lvl >= 1 && lvl <= 100);
+
+            // Read from local storage (Gym Cardio)
+            const localGymPoints = parseInt(localStorage.getItem('nabdah_gym_points') || '0', 10);
+            const finalGymPoints = Math.max(dbGymPoints, isNaN(localGymPoints) ? 0 : localGymPoints);
+
+            const localSprintLvl = parseInt(localStorage.getItem('nabdah_sprint_lvl') || '1', 10);
+            const finalSprintLvl = Math.max(dbSprintLevel, isNaN(localSprintLvl) ? 1 : localSprintLvl);
+
+            const localCyclingLvl = parseInt(localStorage.getItem('nabdah_cycling_lvl') || '1', 10);
+            const finalCyclingLvl = Math.max(dbCyclingLevel, isNaN(localCyclingLvl) ? 1 : localCyclingLvl);
+
+            const localSwimmingLvl = parseInt(localStorage.getItem('nabdah_swimming_lvl') || '1', 10);
+            const finalSwimmingLvl = Math.max(dbSwimmingLevel, isNaN(localSwimmingLvl) ? 1 : localSwimmingLvl);
+
+            const localStrengthLvl = parseInt(localStorage.getItem('nabdah_strength_lvl') || '1', 10);
+            const finalStrengthLvl = Math.max(dbStrengthLevel, isNaN(localStrengthLvl) ? 1 : localStrengthLvl);
+
             // Update local storage
             localStorage.setItem('nabdah_max_unlocked_level_v1', String(finalMax));
             localStorage.setItem('nabdah_completed_levels_v1', JSON.stringify(finalCompleted));
 
+            localStorage.setItem('nabdah_max_unlocked_lifestyle_level_v1', String(finalMaxLifestyle));
+            localStorage.setItem('nabdah_completed_lifestyle_levels_v1', JSON.stringify(finalCompletedLifestyle));
+
+            localStorage.setItem('nabdah_gym_points', String(finalGymPoints));
+            localStorage.setItem('nabdah_sprint_lvl', String(finalSprintLvl));
+            localStorage.setItem('nabdah_cycling_lvl', String(finalCyclingLvl));
+            localStorage.setItem('nabdah_swimming_lvl', String(finalSwimmingLvl));
+            localStorage.setItem('nabdah_strength_lvl', String(finalStrengthLvl));
+
             // Set React level state
             setMaxUnlockedLevel(finalMax);
+            setMaxUnlockedLifestyleLevel(finalMaxLifestyle);
+            setCompletedLifestyleLevels(finalCompletedLifestyle);
+
+            setGymPoints(finalGymPoints);
+            setSprintLevel(finalSprintLvl);
+            setCyclingLevel(finalCyclingLvl);
+            setSwimmingLevel(finalSwimmingLvl);
+            setStrengthLevel(finalStrengthLvl);
 
             // Update database if local has different or newer progress
-            if (finalMax > dbMax || finalCompleted.length > dbCompleted.length) {
+            if (
+              finalMax > dbMax || 
+              finalCompleted.length > dbCompleted.length ||
+              finalMaxLifestyle > dbMaxLifestyle ||
+              finalCompletedLifestyle.length > dbCompletedLifestyle.length ||
+              finalGymPoints > dbGymPoints ||
+              finalSprintLvl > dbSprintLevel ||
+              finalCyclingLvl > dbCyclingLevel ||
+              finalSwimmingLvl > dbSwimmingLevel ||
+              finalStrengthLvl > dbStrengthLevel
+            ) {
               await updateDoc(userRef, {
                 maxUnlockedLevel: finalMax,
                 completedLevels: finalCompleted,
+                maxUnlockedLifestyleLevel: finalMaxLifestyle,
+                completedLifestyleLevels: finalCompletedLifestyle,
+                gymPoints: finalGymPoints,
+                sprintLevel: finalSprintLvl,
+                cyclingLevel: finalCyclingLvl,
+                swimmingLevel: finalSwimmingLvl,
+                strengthLevel: finalStrengthLvl,
                 updatedAt: serverTimestamp()
               });
             }
@@ -761,11 +1040,60 @@ export default function App() {
         return;
       }
 
+      if (gameMode === 'LIFESTYLE' && currentLevel > 0 && !levelCompleted && scoreRef.current >= getLifestyleStageConfig(currentLevel).targetScore) {
+        setLevelCompleted(true);
+        setGameState('LEVEL_COMPLETE');
+        rotateHeartTip();
+        isPlayingRef.current = false;
+        audioSynthRef.current.stopAmbientSoundtrack();
+        audioSynthRef.current.playPerfectSound();
+        
+        // Save level status
+        const nextLvl = currentLevel + 1;
+        let updatedMaxLvl = maxUnlockedLifestyleLevel;
+        if (nextLvl <= 100 && nextLvl > maxUnlockedLifestyleLevel) {
+          updatedMaxLvl = nextLvl;
+          setMaxUnlockedLifestyleLevel(nextLvl);
+          localStorage.setItem('nabdah_max_unlocked_lifestyle_level_v1', String(nextLvl));
+        }
+        
+        // Add level to completed list
+        let completedList: number[] = [];
+        try {
+          completedList = JSON.parse(localStorage.getItem('nabdah_completed_lifestyle_levels_v1') || '[]');
+          if (!completedList.includes(currentLevel)) {
+            completedList.push(currentLevel);
+            localStorage.setItem('nabdah_completed_lifestyle_levels_v1', JSON.stringify(completedList));
+          }
+        } catch (e) {
+          console.error(e);
+        }
+
+        setCompletedLifestyleLevels(completedList);
+
+        // Deploy/save level progress immediately to Firestore if authenticated
+        if (currentUser) {
+          const userRef = doc(db, 'users', currentUser.uid);
+          try {
+            updateDoc(userRef, {
+              maxUnlockedLifestyleLevel: updatedMaxLvl,
+              completedLifestyleLevels: completedList,
+              updatedAt: serverTimestamp()
+            });
+          } catch (e) {
+            console.error("Failed to sync lifestyle progress to cloud database on level complete: ", e);
+          }
+        }
+        return;
+      }
+
       // 1. Spawner logic for Player 1 & Player 2
       const currentScore1 = scoreRef.current;
       let adaptiveSpawnInterval1 = Math.max(655, 2200 - (currentScore1 * 0.12));
       if (gameMode === 'LEVELS') {
         adaptiveSpawnInterval1 = getStageConfig(currentLevel).baseSpawnInterval;
+      } else if (gameMode === 'LIFESTYLE' && currentLevel > 0) {
+        adaptiveSpawnInterval1 = getLifestyleStageConfig(currentLevel).baseSpawnInterval;
       }
       
       if (now - lastSpawnTimeRef.current > adaptiveSpawnInterval1) {
@@ -780,6 +1108,8 @@ export default function App() {
         let adaptiveSpawnInterval2 = Math.max(655, 2200 - (currentScore2 * 0.12));
         if (gameMode === 'LEVELS') {
           adaptiveSpawnInterval2 = getStageConfig(currentLevel).baseSpawnInterval;
+        } else if (gameMode === 'LIFESTYLE' && currentLevel > 0) {
+          adaptiveSpawnInterval2 = getLifestyleStageConfig(currentLevel).baseSpawnInterval;
         }
         
         if (now - lastSpawnTimeRef2.current > adaptiveSpawnInterval2) {
@@ -796,6 +1126,8 @@ export default function App() {
       let targetBPM = Math.min(144, 72 + Math.floor(maxScore / 250) * 4);
       if (gameMode === 'LEVELS') {
         targetBPM = Math.min(150, 72 + (currentLevel * 2));
+      } else if (gameMode === 'LIFESTYLE' && currentLevel > 0) {
+        targetBPM = Math.min(150, 72 + Math.floor(currentLevel * 0.72));
       }
       if (targetBPM !== bpmRef.current) {
         setCurrentBPM(targetBPM);
@@ -1234,7 +1566,213 @@ export default function App() {
       const currentScore = playerNum === 1 ? scoreRef.current : scoreRef2.current;
       const roll = Math.random();
       
-      if (gameMode === 'LEVELS') {
+      if (gameMode === 'LIFESTYLE') {
+        const lvl = currentLevel > 0 ? currentLevel : (currentScore < 500 ? 15 : currentScore < 1500 ? 45 : currentScore < 3000 ? 75 : 95);
+        
+        if (lvl >= 91) {
+          // Phase 4: Ultimate Chaos (91-100)
+          if (roll < 0.12) {
+            type = NodeType.LIFESTYLE_DOUBLE_BURGER;
+            color = '#ea580c';
+            initialHealth = 2;
+            speed = 1.35;
+            radius = 18;
+          } else if (roll >= 0.12 && roll < 0.24) {
+            type = NodeType.LIFESTYLE_DOUBLE_SALT;
+            color = '#94a3b8';
+            initialHealth = 2;
+            speed = 1.45;
+            radius = 16;
+          } else if (roll >= 0.24 && roll < 0.36) {
+            type = NodeType.LIFESTYLE_SEDENTARY;
+            color = '#9333ea';
+            initialHealth = 3;
+            speed = 0.95;
+            radius = 19;
+          } else if (roll >= 0.36 && roll < 0.48) {
+            type = NodeType.LIFESTYLE_LATE_NIGHT;
+            color = '#6366f1';
+            initialHealth = 1;
+            speed = 1.75;
+            radius = 14;
+          } else if (roll >= 0.48 && roll < 0.60) {
+            type = NodeType.LIFESTYLE_CIGARETTE;
+            color = '#dc2626';
+            initialHealth = 1;
+            speed = 1.8;
+            radius = 13;
+          } else if (roll >= 0.60 && roll < 0.70) {
+            type = NodeType.LIFESTYLE_STRESS;
+            color = '#c084fc';
+            initialHealth = 1;
+            speed = 1.4;
+            radius = 16;
+          } else if (roll >= 0.70 && roll < 0.78) {
+            type = NodeType.LIFESTYLE_SLEEP;
+            color = '#10b981';
+            initialHealth = 1;
+            speed = 1.1;
+            radius = 15;
+          } else if (roll >= 0.78 && roll < 0.86) {
+            type = NodeType.LIFESTYLE_EXERCISE;
+            color = '#06b6d4';
+            initialHealth = 1;
+            speed = 1.2;
+            radius = 15;
+          } else if (roll >= 0.86 && roll < 0.93) {
+            type = NodeType.LIFESTYLE_APPLE;
+            color = '#22c55e';
+            initialHealth = 1;
+            speed = 1.2;
+            radius = 14;
+          } else {
+            type = NodeType.LIFESTYLE_WATER;
+            color = '#3b82f6';
+            initialHealth = 1;
+            speed = 1.3;
+            radius = 11;
+          }
+        } else if (lvl >= 61) {
+          // Phase 3: Stress & Smoking Zone (61-90)
+          if (roll < 0.12) {
+            type = NodeType.LIFESTYLE_SEDENTARY;
+            color = '#a855f7';
+            initialHealth = 3;
+            speed = 0.85;
+            radius = 18;
+          } else if (roll >= 0.12 && roll < 0.25) {
+            type = NodeType.LIFESTYLE_CIGARETTE;
+            color = '#dc2626';
+            initialHealth = 1;
+            speed = 1.6;
+            radius = 13;
+          } else if (roll >= 0.25 && roll < 0.38) {
+            type = NodeType.LIFESTYLE_STRESS;
+            color = '#c084fc';
+            initialHealth = 1;
+            speed = 1.35;
+            radius = 16;
+          } else if (roll >= 0.38 && roll < 0.50) {
+            type = NodeType.LIFESTYLE_DOUBLE_SALT;
+            color = '#94a3b8';
+            initialHealth = 2;
+            speed = 1.25;
+            radius = 15;
+          } else if (roll >= 0.50 && roll < 0.62) {
+            type = NodeType.LIFESTYLE_LATE_NIGHT;
+            color = '#4f46e5';
+            initialHealth = 1;
+            speed = 1.6;
+            radius = 13;
+          } else if (roll >= 0.62 && roll < 0.72) {
+            type = NodeType.LIFESTYLE_EXERCISE;
+            color = '#06b6d4';
+            initialHealth = 1;
+            speed = 1.1;
+            radius = 14;
+          } else if (roll >= 0.72 && roll < 0.82) {
+            type = NodeType.LIFESTYLE_SLEEP;
+            color = '#10b981';
+            initialHealth = 1;
+            speed = 1.0;
+            radius = 14;
+          } else if (roll >= 0.82 && roll < 0.91) {
+            type = NodeType.LIFESTYLE_APPLE;
+            color = '#22c55e';
+            initialHealth = 1;
+            speed = 1.05;
+            radius = 14;
+          } else {
+            type = NodeType.LIFESTYLE_WATER;
+            color = '#3b82f6';
+            initialHealth = 1;
+            speed = 1.15;
+            radius = 11;
+          }
+        } else if (lvl >= 31) {
+          // Phase 2: Food & Health Challenges (31-60)
+          if (roll < 0.15) {
+            type = NodeType.LIFESTYLE_DOUBLE_BURGER;
+            color = '#ea580c';
+            initialHealth = 2;
+            speed = 1.15;
+            radius = 17;
+          } else if (roll >= 0.15 && roll < 0.30) {
+            type = NodeType.LIFESTYLE_LATE_NIGHT;
+            color = '#4f46e5';
+            initialHealth = 1;
+            speed = 1.5;
+            radius = 12;
+          } else if (roll >= 0.30 && roll < 0.44) {
+            type = NodeType.LIFESTYLE_BURGER;
+            color = '#f59e0b';
+            initialHealth = 1;
+            speed = 1.25;
+            radius = 15;
+          } else if (roll >= 0.44 && roll < 0.58) {
+            type = NodeType.LIFESTYLE_SALT;
+            color = '#cbd5e1';
+            initialHealth = 1;
+            speed = 1.35;
+            radius = 13;
+          } else if (roll >= 0.58 && roll < 0.70) {
+            type = NodeType.LIFESTYLE_SLEEP;
+            color = '#10b981';
+            initialHealth = 1;
+            speed = 1.0;
+            radius = 14;
+          } else if (roll >= 0.70 && roll < 0.82) {
+            type = NodeType.LIFESTYLE_APPLE;
+            color = '#22c55e';
+            initialHealth = 1;
+            speed = 1.0;
+            radius = 14;
+          } else if (roll >= 0.82 && roll < 0.91) {
+            type = NodeType.LIFESTYLE_WATER;
+            color = '#3b82f6';
+            initialHealth = 1;
+            speed = 1.1;
+            radius = 11;
+          } else {
+            type = NodeType.LIFESTYLE_STRESS;
+            color = '#a855f7';
+            initialHealth = 1;
+            speed = 1.25;
+            radius = 15;
+          }
+        } else {
+          // Phase 1: Basic Habits (1-30)
+          if (roll < 0.25) {
+            type = NodeType.LIFESTYLE_BURGER;
+            color = '#f59e0b';
+            initialHealth = 1;
+            speed = 1.05;
+            radius = 14;
+          } else if (roll >= 0.25 && roll < 0.50) {
+            type = NodeType.LIFESTYLE_SALT;
+            color = '#cbd5e1';
+            initialHealth = 1;
+            speed = 1.2;
+            radius = 12;
+          } else if (roll >= 0.50 && roll < 0.75) {
+            type = NodeType.LIFESTYLE_APPLE;
+            color = '#22c55e';
+            initialHealth = 1;
+            speed = 0.9;
+            radius = 13;
+          } else {
+            type = NodeType.LIFESTYLE_WATER;
+            color = '#3b82f6';
+            initialHealth = 1;
+            speed = 1.1;
+            radius = 11;
+          }
+        }
+
+        // Apply progressive level speed scaling
+        const gameLvlSpeedFactor = 1 + (lvl * 0.0075);
+        speed *= gameLvlSpeedFactor;
+      } else if (gameMode === 'LEVELS') {
         const stage = currentLevel;
         if (stage === 100) {
           // Ultimate Coronary Embolus Grand Boss (Level 100!)
@@ -1852,82 +2390,158 @@ export default function App() {
       const nodeToHit = prevNodes.find((n) => n.id === id);
       if (!nodeToHit) return prevNodes;
 
-      // Tap decrease health
-      const nextHealth = nodeToHit.health - 1;
+      // Tap decrease health with active Gym Strength booster
+      const tapDamage = strengthActive ? (1 + strengthLevel) : 1;
+      const nextHealth = nodeToHit.health - tapDamage;
 
       // Create spark debris burst on impact (Giant boss generates an epic burst of 45 particles)
       createExplosionDebris(playerNum, tapX, tapY, nodeToHit.color, nextHealth <= 0 ? (nodeToHit.type === NodeType.GIANT_BOSS ? 45 : 15) : 6);
 
       // Play audio cue
-      if (isPerfect) {
-        audioSynthRef.current.playPerfectSound();
-        if (playerNum === 1) {
-          const isP1Fever = combo >= 15;
-          const scoreAdd = isP1Fever ? 300 : 200;
-          setScore((prev) => prev + scoreAdd);
-          setCombo((prev) => {
-            const newCombo = prev + 1;
-            if (newCombo > maxCombo) setMaxCombo(newCombo);
-            return newCombo;
-          });
-          setAccuracy(prev => ({ total: prev.total + 1, perfect: prev.perfect + 1 }));
-          spawnFloatingText(1, isP1Fever ? '🔥 نبضة حمى ذهبية! +300' : '🚨 نبضة مثالية! +200', tapX, tapY, isP1Fever ? '#facc15' : '#10b981', true);
+      const isHealthyNode = 
+        nodeToHit.type === NodeType.LIFESTYLE_APPLE || 
+        nodeToHit.type === NodeType.LIFESTYLE_WATER ||
+        nodeToHit.type === NodeType.LIFESTYLE_SLEEP ||
+        nodeToHit.type === NodeType.LIFESTYLE_EXERCISE;
+
+      if (gameMode === 'LIFESTYLE') {
+        if (isHealthyNode) {
+          audioSynthRef.current.playHitSound();
+          if (playerNum === 1) {
+            setScore((prev) => Math.max(0, prev - 5));
+            setCombo(0);
+            setAccuracy(prev => ({ ...prev, total: prev.total + 1 }));
+            spawnFloatingText(1, '❌ عنصر صحي! -5', tapX, tapY, '#f43f5e', false);
+          } else {
+            setScore2((prev) => Math.max(0, prev - 5));
+            setCombo2(0);
+            setAccuracy2(prev => ({ ...prev, total: prev.total + 1 }));
+            spawnFloatingText(2, '❌ عنصر صحي! -5', tapX, tapY, '#f43f5e', false);
+          }
         } else {
-          const isP2Fever = combo2 >= 15;
-          const scoreAdd = isP2Fever ? 300 : 200;
-          setScore2((prev) => prev + scoreAdd);
-          setCombo2((prev) => {
-            const newCombo = prev + 1;
-            if (newCombo > maxCombo2) setMaxCombo2(newCombo);
-            return newCombo;
-          });
-          setAccuracy2(prev => ({ total: prev.total + 1, perfect: prev.perfect + 1 }));
-          spawnFloatingText(2, isP2Fever ? '🔥 نبضة حمى ذهبية! + 300' : '🚨 نبضة مثالية! +200', tapX, tapY, isP2Fever ? '#facc15' : '#10b981', true);
+          if (isPerfect) {
+            audioSynthRef.current.playPerfectSound();
+            if (playerNum === 1) {
+              setScore((prev) => prev + 20);
+              setCombo((prev) => {
+                const newCombo = prev + 1;
+                if (newCombo > maxCombo) setMaxCombo(newCombo);
+                return newCombo;
+              });
+              setAccuracy(prev => ({ total: prev.total + 1, perfect: prev.perfect + 1 }));
+              spawnFloatingText(1, '⭐ مثالي! +20', tapX, tapY, '#10b981', true);
+            } else {
+              setScore2((prev) => prev + 20);
+              setCombo2((prev) => {
+                const newCombo = prev + 1;
+                if (newCombo > maxCombo2) setMaxCombo2(newCombo);
+                return newCombo;
+              });
+              setAccuracy2(prev => ({ total: prev.total + 1, perfect: prev.perfect + 1 }));
+              spawnFloatingText(2, '⭐ مثالي! +20', tapX, tapY, '#10b981', true);
+            }
+          } else {
+            audioSynthRef.current.playHitSound();
+            if (playerNum === 1) {
+              setScore((prev) => prev + 10);
+              setCombo((prev) => {
+                const newCombo = prev + 1;
+                if (newCombo > maxCombo) setMaxCombo(newCombo);
+                return newCombo;
+              });
+              setAccuracy(prev => ({ ...prev, total: prev.total + 1 }));
+              spawnFloatingText(1, '⚡ ممتاز! +10', tapX, tapY, '#22d3ee', false);
+            } else {
+              setScore2((prev) => prev + 10);
+              setCombo2((prev) => {
+                const newCombo = prev + 1;
+                if (newCombo > maxCombo2) setMaxCombo2(newCombo);
+                return newCombo;
+              });
+              setAccuracy2(prev => ({ ...prev, total: prev.total + 1 }));
+              spawnFloatingText(2, '⚡ ممتاز! +10', tapX, tapY, '#22d3ee', false);
+            }
+          }
         }
       } else {
-        audioSynthRef.current.playHitSound();
-        if (playerNum === 1) {
-          const isP1Fever = combo >= 15;
-          const scoreAdd = isP1Fever ? 150 : 100;
-          setScore((prev) => prev + scoreAdd);
-          setCombo((prev) => {
-            const newCombo = prev + 1;
-            if (newCombo > maxCombo) setMaxCombo(newCombo);
-            return newCombo;
-          });
-          setAccuracy(prev => ({ ...prev, total: prev.total + 1 }));
-          spawnFloatingText(1, isP1Fever ? '⚡ نقرة فورة! +150' : '+100 نقرة', tapX, tapY, isP1Fever ? '#eab308' : '#22d3ee', false);
+        if (isPerfect) {
+          audioSynthRef.current.playPerfectSound();
+          if (playerNum === 1) {
+            const isP1Fever = combo >= 15;
+            const scoreAdd = isP1Fever ? 300 : 200;
+            setScore((prev) => prev + scoreAdd);
+            setCombo((prev) => {
+              const newCombo = prev + 1;
+              if (newCombo > maxCombo) setMaxCombo(newCombo);
+              return newCombo;
+            });
+            setAccuracy(prev => ({ total: prev.total + 1, perfect: prev.perfect + 1 }));
+            spawnFloatingText(1, isP1Fever ? '🔥 نبضة حمى ذهبية! +300' : '🚨 نبضة مثالية! +200', tapX, tapY, isP1Fever ? '#facc15' : '#10b981', true);
+          } else {
+            const isP2Fever = combo2 >= 15;
+            const scoreAdd = isP2Fever ? 300 : 200;
+            setScore2((prev) => prev + scoreAdd);
+            setCombo2((prev) => {
+              const newCombo = prev + 1;
+              if (newCombo > maxCombo2) setMaxCombo2(newCombo);
+              return newCombo;
+            });
+            setAccuracy2(prev => ({ total: prev.total + 1, perfect: prev.perfect + 1 }));
+            spawnFloatingText(2, isP2Fever ? '🔥 نبضة حمى ذهبية! + 300' : '🚨 نبضة مثالية! +200', tapX, tapY, isP2Fever ? '#facc15' : '#10b981', true);
+          }
         } else {
-          const isP2Fever = combo2 >= 15;
-          const scoreAdd = isP2Fever ? 150 : 100;
-          setScore2((prev) => prev + scoreAdd);
-          setCombo2((prev) => {
-            const newCombo = prev + 1;
-            if (newCombo > maxCombo2) setMaxCombo2(newCombo);
-            return newCombo;
-          });
-          setAccuracy2(prev => ({ ...prev, total: prev.total + 1 }));
-          spawnFloatingText(2, isP2Fever ? '⚡ نقرة فورة! +150' : '+100 نقرة', tapX, tapY, isP2Fever ? '#eab308' : '#22d3ee', false);
+          audioSynthRef.current.playHitSound();
+          if (playerNum === 1) {
+            const isP1Fever = combo >= 15;
+            const scoreAdd = isP1Fever ? 150 : 100;
+            setScore((prev) => prev + scoreAdd);
+            setCombo((prev) => {
+              const newCombo = prev + 1;
+              if (newCombo > maxCombo) setMaxCombo(newCombo);
+              return newCombo;
+            });
+            setAccuracy(prev => ({ ...prev, total: prev.total + 1 }));
+            spawnFloatingText(1, isP1Fever ? '⚡ نقرة فورة! +150' : '+100 نقرة', tapX, tapY, isP1Fever ? '#eab308' : '#22d3ee', false);
+          } else {
+            const isP2Fever = combo2 >= 15;
+            const scoreAdd = isP2Fever ? 150 : 100;
+            setScore2((prev) => prev + scoreAdd);
+            setCombo2((prev) => {
+              const newCombo = prev + 1;
+              if (newCombo > maxCombo2) setMaxCombo2(newCombo);
+              return newCombo;
+            });
+            setAccuracy2(prev => ({ ...prev, total: prev.total + 1 }));
+            spawnFloatingText(2, isP2Fever ? '⚡ نقرة فورة! +150' : '+100 نقرة', tapX, tapY, isP2Fever ? '#eab308' : '#22d3ee', false);
+          }
         }
       }
 
       if (nextHealth <= 0) {
         // Trigger Specialty effects
         if (nodeToHit.type === NodeType.ADRENALINE) {
+          let healPct = 15;
+          if (swimmingActive) {
+            healPct = Math.round(15 * (1 + swimmingLevel * 0.25));
+          }
           if (playerNum === 1) {
-            setHeartHealth((h) => Math.min(100, h + 15));
-            spawnFloatingText(1, '❤️ جرعة أدرينالين! +15%', tapX, tapY, '#10b981', true);
+            setHeartHealth((h) => Math.min(100, h + healPct));
+            spawnFloatingText(1, `❤️ جرعة أدرينالين! +${healPct}%`, tapX, tapY, '#10b981', true);
           } else {
-            setHeartHealth2((h) => Math.min(100, h + 15));
-            spawnFloatingText(2, '❤️ جرعة أدرينالين! +15%', tapX, tapY, '#10b981', true);
+            setHeartHealth2((h) => Math.min(100, h + healPct));
+            spawnFloatingText(2, `❤️ جرعة أدرينالين! +${healPct}%`, tapX, tapY, '#10b981', true);
           }
         } else if (nodeToHit.type === NodeType.PACEMAKER) {
+          let slowSeconds = 5;
+          if (cyclingActive) {
+            slowSeconds = Math.round(5 * (1 + cyclingLevel * 0.3));
+          }
           if (playerNum === 1) {
-            setStabilizationTimeLeft(5);
-            spawnFloatingText(1, '🛡️ تشغيل منظم النبض! (تباطؤ)', tapX, tapY, '#38bdf8', true);
+            setStabilizationTimeLeft(slowSeconds);
+            spawnFloatingText(1, `🛡️ تشغيل منظم النبض! (تباطؤ ${slowSeconds}ث)`, tapX, tapY, '#38bdf8', true);
           } else {
-            setStabilizationTimeLeft2(5);
-            spawnFloatingText(2, '🛡️ تشغيل منظم النبض! (تباطؤ)', tapX, tapY, '#38bdf8', true);
+            setStabilizationTimeLeft2(slowSeconds);
+            spawnFloatingText(2, `🛡️ تشغيل منظم النبض! (تباطؤ ${slowSeconds}ث)`, tapX, tapY, '#38bdf8', true);
           }
         } else if (nodeToHit.type === NodeType.ARRHYTHMIA) {
           spawnFloatingText(playerNum, '⚡ نبضة مضطربة جرى تثبيتها!', tapX, tapY, '#f97316', true);
@@ -1987,90 +2601,187 @@ export default function App() {
       // Determine damage percentage
       let dmg = 10;
       let label = '⚠️ اضطراب قلبي!';
-      if (missedNode.type === NodeType.CLOT) {
-        dmg = 15;
-        label = '🚨 جلتة حادة!!';
-      } else if (missedNode.type === NodeType.VIRUS) {
-        dmg = 12;
-        label = '👾 تلوث خلوي!';
-      } else if (missedNode.type === NodeType.ARRHYTHMIA) {
-        dmg = 18;
-        label = '⚡ نوبة اضطراب حادة!';
-      } else if (missedNode.type === NodeType.ADRENALINE) {
-        dmg = 0;
-        label = '💨 ضاعت جرعة الدعم!';
-      } else if (missedNode.type === NodeType.PACEMAKER) {
-        dmg = 0;
-        label = '🛡️ فاتك منظم النبض!';
-      } else if (missedNode.type === NodeType.GIANT_BOSS) {
-        dmg = 35;
-        label = '💥 غزو البكتيريا العملاقة الخارق!!!';
-      } else if (missedNode.type === NodeType.BIG_BACTERIA) {
-        dmg = 20;
-        label = '🦠 وباء بكتيري جسيم!';
-      } else if (missedNode.type === NodeType.FAST_GERM) {
-        dmg = 14;
-        label = '⚡ فتك جرثومي خاطف!';
+      let isBenefit = false;
+      let ptAdd = 0;
+
+      if (gameMode === 'LIFESTYLE') {
+        if (missedNode.type === NodeType.LIFESTYLE_BURGER) {
+          dmg = 20; // 1 life
+          label = '🍔 برجر دهني!';
+        } else if (missedNode.type === NodeType.LIFESTYLE_SALT) {
+          dmg = 20; // 1 life
+          label = '🧂 صوديوم زائد!';
+        } else if (missedNode.type === NodeType.LIFESTYLE_CIGARETTE) {
+          dmg = 40; // 2 lives
+          label = '🚬 دخان خطر!';
+        } else if (missedNode.type === NodeType.LIFESTYLE_STRESS) {
+          dmg = 20; // 1 life
+          label = '😰 توتر ونشاط مفرط!';
+          if (playerNum === 1) {
+            setScreenBlur(true);
+            setTimeout(() => setScreenBlur(false), 3000);
+          }
+        } else if (missedNode.type === NodeType.LIFESTYLE_DOUBLE_BURGER) {
+          dmg = 35;
+          label = '🍔🍔 وجبة مضاعفة ضارة!';
+        } else if (missedNode.type === NodeType.LIFESTYLE_DOUBLE_SALT) {
+          dmg = 35;
+          label = '🧂🧂 أملاح الصوديوم المضاعفة!';
+        } else if (missedNode.type === NodeType.LIFESTYLE_LATE_NIGHT) {
+          dmg = 20;
+          label = '🌙 السهر وخسارة الراحة!';
+        } else if (missedNode.type === NodeType.LIFESTYLE_SEDENTARY) {
+          dmg = 25;
+          label = '📺 خمول وجلوس طويل خافض للنبض!';
+        } else if (missedNode.type === NodeType.LIFESTYLE_APPLE) {
+          dmg = -20; // Heals 1 life!
+          isBenefit = true;
+          ptAdd = 15;
+          label = '🍎 تفاحة كاملة الفائدة!';
+        } else if (missedNode.type === NodeType.LIFESTYLE_WATER) {
+          dmg = 0; // Pure rhythm boost
+          isBenefit = true;
+          ptAdd = 20;
+          label = '💧 إرتواء بالماء!';
+        } else if (missedNode.type === NodeType.LIFESTYLE_SLEEP) {
+          dmg = -30; // Heals 1.5 lives!
+          isBenefit = true;
+          ptAdd = 25;
+          label = '😴 نوم عميق ومريح للقلب!';
+        } else if (missedNode.type === NodeType.LIFESTYLE_EXERCISE) {
+          dmg = -30; // Heals!
+          isBenefit = true;
+          ptAdd = 30;
+          label = '🏃‍♂️ نشاط رياضي وصحة قلب!';
+        }
+      } else {
+        if (missedNode.type === NodeType.CLOT) {
+          dmg = 15;
+          label = '🚨 جلتة حادة!!';
+        } else if (missedNode.type === NodeType.VIRUS) {
+          dmg = 12;
+          label = '👾 تلوث خلوي!';
+        } else if (missedNode.type === NodeType.ARRHYTHMIA) {
+          dmg = 18;
+          label = '⚡ نوبة اضطراب حادة!';
+        } else if (missedNode.type === NodeType.ADRENALINE) {
+          dmg = 0;
+          label = '💨 ضاعت جرعة الدعم!';
+        } else if (missedNode.type === NodeType.PACEMAKER) {
+          dmg = 0;
+          label = '🛡️ فاتك منظم النبض!';
+        } else if (missedNode.type === NodeType.GIANT_BOSS) {
+          dmg = 35;
+          label = '💥 غزو البكتيريا العملاقة الخارق!!!';
+        } else if (missedNode.type === NodeType.BIG_BACTERIA) {
+          dmg = 20;
+          label = '🦠 وباء بكتيري جسيم!';
+        } else if (missedNode.type === NodeType.FAST_GERM) {
+          dmg = 14;
+          label = '⚡ فتك جرثومي خاطف!';
+        }
       }
 
       if (playerNum === 1) {
-        // Apply Screen Shake visual effect
-        setScreenShake(true);
-        setTimeout(() => setScreenShake(false), 240);
+        if (gameMode === 'LIFESTYLE' && isBenefit) {
+          audioSynthRef.current.playPerfectSound();
+          createExplosionDebris(1, 190, 190, missedNode.color || '#22c55e', 15);
+          setScore((prev) => prev + ptAdd);
+          spawnFloatingText(1, `${label} +${ptAdd}`, 190, 150, missedNode.color || '#22c55e', true);
+          
+          let healAmount = dmg; // dmg is negative (e.g., -15 or -20 for water/apple)
+          if (swimmingActive) {
+            const multiplier = 1 + (swimmingLevel * 0.25);
+            healAmount = Math.round(dmg * multiplier);
+          }
+          setHeartHealth((h) => Math.min(100, h - healAmount)); // heals
+        } else {
+          // Apply Screen Shake visual effect
+          setScreenShake(true);
+          setTimeout(() => setScreenShake(false), 240);
 
-        // Trigger warning audio synth damage hit
-        audioSynthRef.current.playDamageSound();
+          // Trigger warning audio synth damage hit
+          audioSynthRef.current.playDamageSound();
 
-        // Break chain combo
-        setCombo(0);
+          // Break chain combo
+          setCombo(0);
 
-        // Spark debris
-        createExplosionDebris(1, 190, 190, '#ef4444', 18);
+          // Spark debris
+          createExplosionDebris(1, 190, 190, '#ef4444', 18);
 
-        // Renders Floating damage notification
-        spawnFloatingText(1, `${label} -${dmg}%`, 190, 150, '#ef4444', true);
+          // Apply Gym Cardio Sprint / Heart Shield damage reduction modifier
+          let finalDmg = dmg;
+          if (cardioSprintActive) {
+            const multiplier = Math.max(0.4, 1 - (sprintLevel * 0.12));
+            finalDmg = Math.round(dmg * multiplier);
+          }
 
-        // Apply health penalty
-        setHeartHealth((h) => {
-          const nextH = Math.max(0, h - dmg);
-          if (nextH <= 0) {
-            if (!isSplitScreenRef.current && !isOnlineCoop && !defibrillatorUsed && (gameMode === 'LEVELS' || gameMode === 'ENDLESS')) {
-              isPlayingRef.current = false;
-              setIsDefibrillatorActive(true);
-              setDefibrillatorCharge(0);
-              setDefibrillatorTimeLeft(10);
-              audioSynthRef.current.startFlatline();
-            } else {
+          // Renders Floating damage notification
+          spawnFloatingText(1, `${label} -${finalDmg}%`, 190, 150, '#ef4444', true);
+
+          // Apply health penalty
+          setHeartHealth((h) => {
+            const nextH = Math.max(0, h - finalDmg);
+            if (nextH <= 0) {
+              if (!isSplitScreenRef.current && !isOnlineCoop && !defibrillatorUsed && (gameMode === 'LEVELS' || gameMode === 'ENDLESS')) {
+                isPlayingRef.current = false;
+                setIsDefibrillatorActive(true);
+                setDefibrillatorCharge(0);
+                setDefibrillatorTimeLeft(10);
+                audioSynthRef.current.startFlatline();
+              } else {
+                handleGameOver();
+              }
+            }
+            return nextH;
+          });
+        }
+      } else {
+        if (gameMode === 'LIFESTYLE' && isBenefit) {
+          audioSynthRef.current.playPerfectSound();
+          createExplosionDebris(2, 190, 190, missedNode.color || '#22c55e', 15);
+          setScore2((prev) => prev + ptAdd);
+          spawnFloatingText(2, `${label} +${ptAdd}`, 190, 150, missedNode.color || '#22c55e', true);
+          
+          let healAmount = dmg;
+          if (swimmingActive) {
+            const multiplier = 1 + (swimmingLevel * 0.25);
+            healAmount = Math.round(dmg * multiplier);
+          }
+          setHeartHealth2((h) => Math.min(100, h - healAmount));
+        } else {
+          // Apply Screen Shake visual effect
+          setScreenShake2(true);
+          setTimeout(() => setScreenShake2(false), 240);
+
+          // Trigger warning audio synth damage hit
+          audioSynthRef.current.playDamageSound();
+
+          // Break chain combo
+          setCombo2(0);
+
+          // Spark debris
+          createExplosionDebris(2, 190, 190, '#ef4444', 18);
+
+          // Apply Gym Cardio Sprint damage modifier for P2
+          let finalDmg = dmg;
+          if (cardioSprintActive) {
+            const multiplier = Math.max(0.4, 1 - (sprintLevel * 0.12));
+            finalDmg = Math.round(dmg * multiplier);
+          }
+
+          // Renders Floating damage notification
+          spawnFloatingText(2, `${label} -${finalDmg}%`, 190, 150, '#ef4444', true);
+
+          // Apply health penalty
+          setHeartHealth2((h) => {
+            const nextH = Math.max(0, h - finalDmg);
+            if (nextH <= 0) {
               handleGameOver();
             }
-          }
-          return nextH;
-        });
-      } else {
-        // Apply Screen Shake visual effect
-        setScreenShake2(true);
-        setTimeout(() => setScreenShake2(false), 240);
-
-        // Trigger warning audio synth damage hit
-        audioSynthRef.current.playDamageSound();
-
-        // Break chain combo
-        setCombo2(0);
-
-        // Spark debris
-        createExplosionDebris(2, 190, 190, '#ef4444', 18);
-
-        // Renders Floating damage notification
-        spawnFloatingText(2, `${label} -${dmg}%`, 190, 150, '#ef4444', true);
-
-        // Apply health penalty
-        setHeartHealth2((h) => {
-          const nextH = Math.max(0, h - dmg);
-          if (nextH <= 0) {
-            handleGameOver();
-          }
-          return nextH;
-        });
+            return nextH;
+          });
+        }
       }
 
       return prevNodes.filter((n) => n.id !== id);
@@ -2561,7 +3272,7 @@ export default function App() {
   };
 
   // Safe game initialisation
-  const startGame = async (selectedMode: 'ENDLESS' | 'TIMED' | 'LEVELS' = 'ENDLESS', specificLevel?: number) => {
+  const startGame = async (selectedMode: 'ENDLESS' | 'TIMED' | 'LEVELS' | 'LIFESTYLE' = 'ENDLESS', specificLevel?: number) => {
     // Init Audio Context safely via user click gesture
     try {
       await audioSynthRef.current.initialize();
@@ -2577,8 +3288,21 @@ export default function App() {
     setIsSplitScreen(false);
     setSplitScreenWinner('');
     setLevelCompleted(false);
-    if (selectedMode === 'LEVELS' && specificLevel !== undefined) {
-      setCurrentLevel(specificLevel);
+
+    if (selectedMode === 'LIFESTYLE') {
+      setCurrentCampaign('LIFESTYLE');
+      if (specificLevel !== undefined) {
+        setCurrentLevel(specificLevel);
+      } else {
+        setCurrentLevel(0); // endless lifestyle
+      }
+    } else {
+      setCurrentCampaign('MEDICAL');
+      if (selectedMode === 'LEVELS' && specificLevel !== undefined) {
+        setCurrentLevel(specificLevel);
+      } else {
+        setCurrentLevel(1);
+      }
     }
 
     // Reset Stats
@@ -2934,6 +3658,335 @@ export default function App() {
           </div>
         )}
 
+        {/* CARDIO FITNESS GYM PORTAL MODAL */}
+        {isGymOpen && (
+          <div className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center z-50 p-4">
+            <div className="bg-slate-950/95 border border-red-500/30 rounded-3xl w-full max-w-lg p-5 flex flex-col gap-4 text-right animate-fade-in font-sans shadow-[0_0_40px_rgba(239,68,68,0.15)] max-h-[90vh] overflow-y-auto">
+              
+              {/* Header */}
+              <div className="flex justify-between items-center border-b border-white/10 pb-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    audioSynthRef.current.playPerfectSound();
+                    setIsGymOpen(false);
+                    setGymPracticeType('NONE');
+                  }}
+                  className="p-1.5 rounded-lg bg-white/5 border border-white/10 text-white/60 hover:text-white cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+                <div className="flex items-center gap-2">
+                  <Flame className="w-5 h-5 text-red-500 animate-pulse" />
+                  <h3 className="text-base font-black text-transparent bg-clip-text bg-gradient-to-r from-red-400 to-amber-500 font-display">صالة نَبْضَة للياقة والتدريبات الرياضية 🏋️‍♂️</h3>
+                </div>
+              </div>
+
+              {gymPracticeType === 'NONE' ? (
+                <>
+                  {/* Gym Info with Stats */}
+                  <div className="bg-gradient-to-br from-red-950/20 to-slate-900 border border-white/5 rounded-2xl p-4 flex flex-col gap-3 relative">
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs font-mono text-amber-400 bg-amber-500/10 px-2.5 py-1 rounded-lg font-black">{gymPoints} XP</span>
+                      <span className="text-xs text-white/50 font-bold">مجموع نقاط اللياقة البدنية:</span>
+                    </div>
+                    <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
+                      <div className="h-full bg-gradient-to-r from-red-500 to-amber-400" style={{ width: `${Math.min(100, (gymPoints % 100))}%` }} />
+                    </div>
+                    <p className="text-[10.5px] text-white/60 leading-relaxed font-sans">
+                      كلما تدربت بالداخل، ازدادت نقاط اللياقة وزادت مستويات التمرين. توفر التمارين قوة هائلة وحصانة نبضية ضد الآفات والأمراض في كافة أطوار اللعب والزمالة!
+                    </p>
+                  </div>
+
+                  {/* Sports list */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    
+                    {/* SPRINT CARD */}
+                    <div className="bg-white/5 border border-white/10 hover:border-red-500/30 rounded-2xl p-3.5 flex flex-col justify-between gap-3 text-right group transition-all">
+                      <div className="flex justify-between items-start">
+                        <span className="text-[10px] text-red-400 font-bold">المستوى {sprintLevel} ⭐</span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs font-bold text-white">الجري السريع 🏃‍♂️</span>
+                        </div>
+                      </div>
+                      <p className="text-[9.5px] text-white/50 leading-relaxed font-sans">
+                        يقوي عضلة القلب ويقلل الضرر والوهن الصحي بنسبة <span className="text-red-400">-{Math.round((1 - Math.max(0.4, 1 - (sprintLevel * 0.12))) * 100)}%</span> في كافة المراحل!
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          audioSynthRef.current.playPerfectSound();
+                          setGymPracticeType('SPRINT');
+                          setPracticeProgress(0);
+                          setPracticeTimer(5);
+                          setPracticeStatusMessage('اضغط بسرعة قصوى لمحاكاة الجري وسحق الدهون وسد الشرايين! 🏃‍♂️');
+                        }}
+                        className="w-full bg-red-650 hover:bg-red-550 text-white font-extrabold py-2 px-3 rounded-lg text-[10.5px] transition-all cursor-pointer"
+                      >
+                        بدء تمرين الجري السريع 🔥
+                      </button>
+                    </div>
+
+                    {/* CYCLING CARD */}
+                    <div className="bg-white/5 border border-white/10 hover:border-amber-500/30 rounded-2xl p-3.5 flex flex-col justify-between gap-3 text-right group transition-all">
+                      <div className="flex justify-between items-start">
+                        <span className="text-[10px] text-amber-400 font-bold">المستوى {cyclingLevel} ⭐</span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs font-bold text-white">دراجة اللياقة 🚴‍♂️</span>
+                        </div>
+                      </div>
+                      <p className="text-[9.5px] text-white/50 leading-relaxed font-sans">
+                        يزيد من كفاءة الدورة الدموية ومفعول منظم النبض بنسبة <span className="text-amber-400 font-bold">+{Math.round(cyclingLevel * 30)}%</span> من الثواني التباطئية!
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          audioSynthRef.current.playPerfectSound();
+                          setGymPracticeType('CYCLING');
+                          setPracticeProgress(0);
+                          setPracticeTimer(5);
+                          setPracticeStatusMessage('اضغط على الدواسات بسرعة واملأ السرعة والضربات! 🚴‍♂️');
+                        }}
+                        className="w-full bg-amber-600 hover:bg-amber-500 text-white font-extrabold py-2 px-3 rounded-lg text-[10.5px] transition-all cursor-pointer"
+                      >
+                        بدء دراجة التحمل 🔥
+                      </button>
+                    </div>
+
+                    {/* SWIMMING CARD */}
+                    <div className="bg-white/5 border border-white/10 hover:border-sky-500/30 rounded-2xl p-3.5 flex flex-col justify-between gap-3 text-right group transition-all">
+                      <div className="flex justify-between items-start">
+                        <span className="text-[10px] text-sky-450 font-bold">المستوى {swimmingLevel} ⭐</span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs font-bold text-white">السباحة الرئوية 🏊‍♂️</span>
+                        </div>
+                      </div>
+                      <p className="text-[9.5px] text-white/50 leading-relaxed font-sans">
+                        يضاعف سعة الأكسجين ويرفع استشفاء الأوعية من الأدرينالين والأغذية بنسبة <span className="text-sky-450 font-bold">+{Math.round(swimmingLevel * 25)}%</span>!
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          audioSynthRef.current.playPerfectSound();
+                          setGymPracticeType('SWIMMING');
+                          setPracticeProgress(40); // lungs depth starts middle
+                          setPracticeTimer(6);
+                          setPracticeStatusMessage('اضغط على التنفس عندما يتطابق المؤشر في المنطقة الخضراء! 🏊‍♂️');
+                        }}
+                        className="w-full bg-sky-600/90 hover:bg-sky-500 text-white font-extrabold py-2 px-3 rounded-lg text-[10.5px] transition-all cursor-pointer"
+                      >
+                        بدء تدريب السباحة والأكسجين 🔥
+                      </button>
+                    </div>
+
+                    {/* STRENGTH CARD */}
+                    <div className="bg-white/5 border border-white/10 hover:border-purple-500/30 rounded-2xl p-3.5 flex flex-col justify-between gap-3 text-right group transition-all">
+                      <div className="flex justify-between items-start">
+                        <span className="text-[10px] text-purple-400 font-bold">المستوى {strengthLevel} ⭐</span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs font-bold text-white">رفع الأثقال والتطهير 🏋️‍♂️</span>
+                        </div>
+                      </div>
+                      <p className="text-[9.5px] text-white/50 leading-relaxed font-sans">
+                        يمنح قلبك قدرة سحق الخثرات والآفات المتراكمة بنبضة واحدة! يلحق <span className="text-purple-400 font-bold">+{strengthLevel} ضرر</span> نقري إضافي!
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          audioSynthRef.current.playPerfectSound();
+                          setGymPracticeType('STRENGTH');
+                          setPracticeProgress(0);
+                          setPracticeTimer(5);
+                          setPracticeStatusMessage('اضغط لرفع الثقل الثقيل فوق رأس دكتور نبضة! 🏋️‍♂️');
+                        }}
+                        className="w-full bg-purple-650 hover:bg-purple-550 text-white font-extrabold py-2 px-3 rounded-lg text-[10.5px] transition-all cursor-pointer"
+                      >
+                        بدء رفع الأثقال الحديدية 🔥
+                      </button>
+                    </div>
+
+                  </div>
+                </>
+              ) : (
+                /* ACTIVE MINI GAME MODULE inside modal */
+                <div className="bg-white/5 border border-white/10 rounded-2xl p-5 flex flex-col gap-4 text-center items-center w-full">
+                  
+                  {gymPracticeType === 'SPRINT' && (
+                    <div className="w-full space-y-4">
+                      <h4 className="text-xs text-red-400 font-black tracking-wider font-sans uppercase">الجري السريع لتوسيع الشرايين 🏃‍♂️</h4>
+                      <p className="text-[11px] text-white/70">{practiceStatusMessage}</p>
+                      
+                      {/* Interactive Track bar */}
+                      <div className="relative w-full h-12 bg-black/40 border border-white/10 rounded-2xl overflow-hidden flex items-center px-4">
+                        <div className="absolute right-0 top-0 bottom-0 bg-red-600/30 transition-all font-sans" style={{ width: `${practiceProgress}%` }} />
+                        <span className="text-2xl z-10 transition-all" style={{ marginRight: `calc(${practiceProgress}% - 24px)` }}>🏃‍♂️</span>
+                        <span className="absolute left-4 text-xs font-sans text-white/45">النهاية 🏆</span>
+                      </div>
+
+                      <div className="flex items-center justify-between border-t border-white/10 pt-3">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (practiceProgress >= 100) return;
+                            audioSynthRef.current.playHitSound();
+                            const next = practiceProgress + 8;
+                            if (next >= 100) {
+                              setPracticeProgress(100);
+                              handleGymExerciseSuccess('SPRINT');
+                            } else {
+                              setPracticeProgress(next);
+                            }
+                          }}
+                          disabled={practiceProgress >= 100}
+                          className="px-6 py-3 bg-red-650 hover:bg-red-550 rounded-xl text-white font-black text-xs active:scale-95 transition-all text-center cursor-pointer flex-1"
+                        >
+                          {practiceProgress >= 100 ? 'تم التدريب بنجاح! 🎉' : 'خطوة سريعة! 🏃‍♂️'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {gymPracticeType === 'CYCLING' && (
+                    <div className="w-full space-y-4">
+                      <h4 className="text-xs text-amber-400 font-black tracking-wider uppercase font-sans">دراجة اللياقة الهوائية 🚴‍♂️</h4>
+                      <p className="text-[11px] text-white/70">{practiceStatusMessage}</p>
+
+                      {/* Speedometer level indicator */}
+                      <div className="flex flex-col items-center justify-center p-3 border border-white/5 bg-slate-900 rounded-2xl relative w-full overflow-hidden">
+                        <p className="text-[10px] text-white/40 mb-1">عداد السرعة والدوران</p>
+                        <p className="text-3xl font-black text-amber-400 transition-all">{Math.round(practiceProgress * 1.8)} RPM</p>
+                        <div className="w-full h-2 bg-white/5 rounded-full mt-2.5 overflow-hidden">
+                          <div className="h-full bg-amber-500 transition-all" style={{ width: `${Math.min(100, practiceProgress)}%` }} />
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between border-t border-white/10 pt-3">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (practiceProgress >= 100) return;
+                            audioSynthRef.current.playHitSound();
+                            const next = practiceProgress + 10;
+                            if (next >= 100) {
+                              setPracticeProgress(100);
+                              handleGymExerciseSuccess('CYCLING');
+                            } else {
+                              setPracticeProgress(next);
+                            }
+                          }}
+                          disabled={practiceProgress >= 100}
+                          className="px-6 py-3 bg-amber-600 hover:bg-amber-500 rounded-xl text-white font-black text-xs active:scale-95 transition-all text-center cursor-pointer flex-1"
+                        >
+                          {practiceProgress >= 100 ? 'تم التدريب بنجاح! 🎉' : 'اضغط على السلسلة والبدّال 🚴‍♂️'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {gymPracticeType === 'SWIMMING' && (
+                    <div className="w-full space-y-4">
+                      <h4 className="text-xs text-sky-400 font-black tracking-wider uppercase font-sans">السباحة الرئوية للأوعية والصمامات 🏊‍♂️</h4>
+                      <p className="text-[11px] text-white/70">{practiceStatusMessage}</p>
+
+                      {/* Breath target indicator */}
+                      <div className="flex flex-col items-center justify-center p-4 border border-white/5 bg-slate-900 rounded-2xl relative w-full overflow-hidden gap-2">
+                        <p className="text-[10px] text-white/40 mb-1">مستوى الأكسجين والقدرة</p>
+                        
+                        {/* Lungs Target Bar */}
+                        <div className="relative w-full h-8 bg-sky-950 border border-white/15 rounded-xl overflow-hidden flex items-center justify-center">
+                          {/* target green zone between 70% and 90% */}
+                          <div className="absolute right-[70%] left-[10%] h-full bg-emerald-500/40 border-x border-emerald-500/60" />
+                          <div className="absolute top-0 bottom-0 w-1 bg-white shadow-[0_0_8px_white] transition-all" style={{ right: `${practiceProgress}%` }} />
+                          <span className="text-[9px] font-bold text-white z-10">منطقة النفس الذهبية ⭐</span>
+                        </div>
+                        <p className="text-[10px] text-white/60">القيمة الحالية: {Math.round(practiceProgress)}%</p>
+                      </div>
+
+                      <div className="flex items-center justify-between border-t border-white/10 pt-3 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            audioSynthRef.current.playHitSound();
+                            // Increase/fluctuate breathing
+                            const factor = Math.random() > 0.5 ? 12 : -15;
+                            const next = Math.max(0, Math.min(100, practiceProgress + factor));
+                            setPracticeProgress(next);
+
+                            // Check if exactly inside golden zone (70% to 90%)
+                            if (next >= 70 && next <= 90) {
+                              handleGymExerciseSuccess('SWIMMING');
+                            } else {
+                              setPracticeStatusMessage('نفس غير مضبوط! حاول جعل المؤشر الأبيض يقف بداخل المنطقة الخضراء!');
+                            }
+                          }}
+                          className="px-6 py-3 bg-sky-600 hover:bg-sky-500 rounded-xl text-white font-black text-xs active:scale-95 transition-all text-center cursor-pointer flex-1"
+                        >
+                          خذ شهيقاً وزفيراً عميقاً! 🏊‍♂️
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {gymPracticeType === 'STRENGTH' && (
+                    <div className="w-full space-y-4">
+                      <h4 className="text-xs text-purple-400 font-black tracking-wider uppercase font-sans">تحدّي رفع الأثقال وتطهير الشرايين 🏋️‍♂️</h4>
+                      <p className="text-[11px] text-white/70">{practiceStatusMessage}</p>
+
+                      {/* Barbell Height gauge */}
+                      <div className="flex flex-col items-center justify-center p-4 border border-white/5 bg-slate-900 rounded-2xl relative w-full overflow-hidden gap-4">
+                        {/* Virtual weight display */}
+                        <div className="text-center font-black text-2xl relative h-16 flex items-center justify-center w-full">
+                          <span className="text-slate-200 transition-all font-sans" style={{ transform: `translateY(-${practiceProgress * 0.3}px) rotate(${Math.sin(practiceProgress) * 5}deg)` }}>
+                            🏋️‍♂️ ─── ⚖️ ─── 🏋️‍♂️
+                          </span>
+                        </div>
+                        <div className="w-full h-2 bg-white/5 rounded-full overflow-hidden">
+                          <div className="h-full bg-purple-500 transition-all" style={{ width: `${practiceProgress}%` }} />
+                        </div>
+                        <p className="text-[10px] text-white/40">ارتفاع الثقل: {practiceProgress}%</p>
+                      </div>
+
+                      <div className="flex items-center justify-between border-t border-white/10 pt-3">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (practiceProgress >= 100) return;
+                            audioSynthRef.current.playHitSound();
+                            const next = practiceProgress + 10;
+                            if (next >= 100) {
+                              setPracticeProgress(100);
+                              handleGymExerciseSuccess('STRENGTH');
+                            } else {
+                              setPracticeProgress(next);
+                            }
+                          }}
+                          disabled={practiceProgress >= 100}
+                          className="px-6 py-3 bg-purple-650 hover:bg-purple-550 rounded-xl text-white font-black text-xs active:scale-95 transition-all text-center cursor-pointer flex-1"
+                        >
+                          {practiceProgress >= 100 ? 'تم رفع الثقل تماماً! 🎉' : 'ادفع بقوتك الرافعة 🏋️‍♂️'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      audioSynthRef.current.playPerfectSound();
+                      setGymPracticeType('NONE');
+                    }}
+                    className="mt-2 text-xs text-white/50 hover:text-white transition-all underline outline-none cursor-pointer"
+                  >
+                    العودة لخيارات الصالة
+                  </button>
+
+                </div>
+              )}
+
+            </div>
+          </div>
+        )}
+
         {/* SCREEN MODULE STATE ROUTER */}
 
         {gameState === 'START' && (
@@ -2941,15 +3994,52 @@ export default function App() {
             <div id="levels-selection-screen" className="flex flex-col gap-4 py-3 animate-fade-in text-center font-sans w-full max-w-lg mx-auto">
               {/* Back button */}
               <div className="flex justify-between items-center mb-1">
-                <h3 className="text-base sm:text-lg font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-red-400 to-amber-400 font-display">
-                  {activeLevelTab === 'CLASSIC' ? "الأوعية الكلاسيكية: المراحل 1 - 30 🏆" : activeLevelTab === 'MUTATED' ? "الطفرة السيبرانية: المراحل 31 - 60 🧪" : activeLevelTab === 'VASCULAR' ? "حملة الأوردة والشرايين: المراحل 61 - 90 🚨" : "جراحة القلب المفتوح: المراحل 91 - 100 🏥"}
+                <h3 className="text-sm sm:text-base font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-red-400 to-amber-400 font-display">
+                  {selectedCampaignTab === 'LIFESTYLE' ? (
+                    activeLevelTab === 'CLASSIC' ? "نمط الحياة الكلاسيكي: المراحل 1 - 30 🥗" : activeLevelTab === 'MUTATED' ? "تحدي النوم والمثابرة: المراحل 31 - 60 😴" : activeLevelTab === 'VASCULAR' ? "سموم التوتر والتدخين: المراحل 61 - 90 🚬" : "التحدي الشامل الختامي: المراحل 91 - 100 🏆"
+                  ) : (
+                    activeLevelTab === 'CLASSIC' ? "الأوعية الكلاسيكية: المراحل 1 - 30 🏆" : activeLevelTab === 'MUTATED' ? "الطفرة السيبرانية: المراحل 31 - 60 🧪" : activeLevelTab === 'VASCULAR' ? "حملة الأوردة والشرايين: المراحل 61 - 90 🚨" : "جراحة القلب المفتوح: المراحل 91 - 100 🏥"
+                  )}
                 </h3>
                 <button
+                  type="button"
                   onClick={() => setShowLevelsView(false)}
                   className="px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 text-white/90 hover:text-white transition-all text-xs flex items-center gap-1 cursor-pointer"
                 >
                   <ArrowLeft className="w-3.5 h-3.5 scale-x-[-1]" />
                   <span>رجوع</span>
+                </button>
+              </div>
+
+              {/* Campaign Switcher */}
+              <div className="flex gap-2 p-1 bg-black/50 rounded-2xl border border-white/5 mx-auto w-full max-w-sm">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedCampaignTab('MEDICAL');
+                    setSelectedLevelInfo(null);
+                  }}
+                  className={`flex-1 py-1.5 text-[11px] font-black rounded-xl transition-all cursor-pointer ${
+                    selectedCampaignTab === 'MEDICAL'
+                      ? 'bg-gradient-to-r from-red-600 to-rose-600 text-white shadow-md border border-red-500/20'
+                      : 'text-white/60 hover:text-white'
+                  }`}
+                >
+                  🔬 الحملة الطبية
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedCampaignTab('LIFESTYLE');
+                    setSelectedLevelInfo(null);
+                  }}
+                  className={`flex-1 py-1.5 text-[11px] font-black rounded-xl transition-all cursor-pointer ${
+                    selectedCampaignTab === 'LIFESTYLE'
+                      ? 'bg-gradient-to-r from-emerald-650 to-teal-600 text-white shadow-md border border-emerald-500/20'
+                      : 'text-white/60 hover:text-white'
+                  }`}
+                >
+                  🥗 حملة نمط الحياة
                 </button>
               </div>
 
@@ -2960,56 +4050,73 @@ export default function App() {
                   onClick={() => setActiveLevelTab('CLASSIC')}
                   className={`flex-1 py-1.5 px-2 text-[10px] font-bold rounded-xl transition-all cursor-pointer whitespace-nowrap ${
                     activeLevelTab === 'CLASSIC'
-                      ? 'bg-gradient-to-r from-red-500/20 to-red-600/20 text-red-400 border border-red-500/30'
+                      ? selectedCampaignTab === 'LIFESTYLE'
+                        ? 'bg-gradient-to-r from-emerald-500/20 to-emerald-600/20 text-emerald-400 border border-emerald-500/30'
+                        : 'bg-gradient-to-r from-red-500/20 to-red-600/20 text-red-400 border border-red-500/30'
                       : 'text-white/60 hover:text-white hover:bg-white/5 border border-transparent'
                   }`}
                 >
-                  الكلاسيكية (1-30)
+                  {selectedCampaignTab === 'LIFESTYLE' ? 'الأساسية (1-30)' : 'الكلاسيكية (1-30)'}
                 </button>
                 <button
                   type="button"
                   onClick={() => setActiveLevelTab('MUTATED')}
                   className={`flex-1 py-1.5 px-2 text-[10px] font-bold rounded-xl transition-all cursor-pointer whitespace-nowrap ${
                     activeLevelTab === 'MUTATED'
-                      ? 'bg-gradient-to-r from-cyan-500/20 to-cyan-600/20 text-cyan-400 border border-cyan-500/30'
+                      ? selectedCampaignTab === 'LIFESTYLE'
+                        ? 'bg-gradient-to-r from-teal-500/20 to-teal-600/20 text-teal-400 border border-teal-500/30'
+                        : 'bg-gradient-to-r from-cyan-500/20 to-cyan-600/20 text-cyan-400 border border-cyan-500/30'
                       : 'text-white/60 hover:text-white hover:bg-white/5 border border-transparent'
                   }`}
                 >
-                  السيبرانية (31-60)
+                  {selectedCampaignTab === 'LIFESTYLE' ? 'الغذاء والنوم (31-60)' : 'السيبرانية (31-60)'}
                 </button>
                 <button
                   type="button"
                   onClick={() => setActiveLevelTab('VASCULAR')}
                   className={`flex-1 py-1.5 px-2 text-[10px] font-bold rounded-xl transition-all cursor-pointer whitespace-nowrap ${
                     activeLevelTab === 'VASCULAR'
-                      ? 'bg-gradient-to-r from-rose-500/20 to-rose-600/20 text-rose-450 border border-rose-500/30'
+                      ? selectedCampaignTab === 'LIFESTYLE'
+                        ? 'bg-gradient-to-r from-green-500/20 to-green-600/20 text-green-400 border border-green-500/30'
+                        : 'bg-gradient-to-r from-rose-500/20 to-rose-600/20 text-rose-450 border border-rose-500/30'
                       : 'text-white/60 hover:text-white hover:bg-white/5 border border-transparent'
                   }`}
                 >
-                  الأوعية (61-90)
+                  {selectedCampaignTab === 'LIFESTYLE' ? 'التوتر والتدخين (61-90)' : 'الأوعية (61-90)'}
                 </button>
                 <button
                   type="button"
                   onClick={() => setActiveLevelTab('CARDIAC')}
                   className={`flex-1 py-1.5 px-2 text-[10px] font-bold rounded-xl transition-all cursor-pointer whitespace-nowrap ${
                     activeLevelTab === 'CARDIAC'
-                      ? 'bg-gradient-to-r from-emerald-500/20 to-emerald-600/20 text-emerald-400 border border-emerald-500/30 shadow-[0_0_12px_rgba(16,185,129,0.15)]'
+                      ? selectedCampaignTab === 'LIFESTYLE'
+                        ? 'bg-gradient-to-r from-cyan-500/20 to-cyan-600/20 text-cyan-400 border border-cyan-500/30 shadow-[0_0_12px_rgba(6,180,180,0.15)]'
+                        : 'bg-gradient-to-r from-emerald-500/20 to-emerald-600/20 text-emerald-400 border border-emerald-500/30 shadow-[0_0_12px_rgba(16,185,129,0.15)]'
                       : 'text-white/60 hover:text-white hover:bg-white/5 border border-transparent'
                   }`}
                 >
-                  القلب المفتوح (91-100)
+                  {selectedCampaignTab === 'LIFESTYLE' ? 'الختام الشامل (91-100)' : 'القلب المفتوح (91-100)'}
                 </button>
               </div>
 
               <p className="text-xs text-white/60 leading-relaxed bg-white/5 p-3 rounded-xl border border-white/5 text-right font-sans" dir="rtl">
-                {activeLevelTab === 'CLASSIC' 
-                  ? "طهر صمامات وعضلات القلب بالتدريج وتجاوز 30 مرحلة من الخطورة والآفات الجرثومية! تزداد وتيرة النبض والعدوانية مع تقدمك."
-                  : activeLevelTab === 'MUTATED'
-                    ? "⚠️ تحذير الطفرة السيبرانية: 30 مرحلة جديدة تختلف عن ال30 الأولى تماماً ببيئة لعب زرقاء مجهرية، جراثيم إلكترونية ذكية، وموسيقى طوارئ تركيبية مختلفة!"
-                    : activeLevelTab === 'VASCULAR'
-                      ? "🔴🔵 حملة المسعف للأوعية والشرايين: 30 مرحلة فائقة الصعوبة والتشويق! جلطات شريانية تتضخم، وخثرات وريدية متعرجة خاطفة لتطوي القنوات، ولويحات تصلب صفراء بـ 4 ضربات، وزعيم الانسداد الأعظم بقوة 20 ضربة!"
-                      : "🏥 جراحة القلب المفتوح الكبرى: 10 مراحل حاسمة نهائية لاستعادة نشاط العقدة الجيبية الأذينية! جلطات مستشرية، ومواجهة زعيم الصمام الأخير بصحة 30 ضربة بتركيز حديدي!"
-                }
+                {selectedCampaignTab === 'LIFESTYLE' ? (
+                  activeLevelTab === 'CLASSIC'
+                    ? "السلوكيات الأساسية: 30 مرحلة لحماية عضلات القلب من البرغر الضار والأملاح الزائدة! دع عناصر الماء المتدفق والتفاح اللذيذ تصل للقلب لتغذيته."
+                    : activeLevelTab === 'MUTATED'
+                      ? "تحدي الأغذية المعدلة والنوم السليم: 30 مرحلة متقدمة! تطلق وجبات برجر دهنية ضخمة وسهر مطول متذبذب، واجهها ودع النوم المريح يرمم القلب."
+                      : activeLevelTab === 'VASCULAR'
+                        ? "سموم العصر الحديث القاتلة: 30 مرحلة حاسمة! تجنب التدخين الخطر، التوتر العالي، وأضرار الجلوس والخمول المديد؛ واستعن بالرياضة والتمارين لتعزيز تدفق الشرايين."
+                        : "تحدي نمط الحياة الختامي الشامل: 10 مستويات مكثفة ومزيج فوضوي يحتاج إلى تركيز حديدي وجرأة مطلقة لتصل بقلبك إلى قمة المثالية!"
+                ) : (
+                  activeLevelTab === 'CLASSIC' 
+                    ? "طهر صمامات وعضلات القلب بالتدريج وتجاوز 30 مرحلة من الخطورة والآفات الجرثومية! تزداد وتيرة النبض والعدوانية مع تقدمك."
+                    : activeLevelTab === 'MUTATED'
+                      ? "⚠️ تحذير الطفرة السيبرانية: 30 مرحلة جديدة تختلف عن ال30 الأولى تماماً ببيئة لعب زرقاء مجهرية، جراثيم إلكترونية ذكية، وموسيقى طوارئ تركيبية مختلفة!"
+                      : activeLevelTab === 'VASCULAR'
+                        ? "🔴🔵 حملة المسعف للأوعية والشرايين: 30 مرحلة فائقة الصعوبة والتشويق! جلطات شريانية تتضخم، وخثرات وريدية متعرجة خاطفة لتطوي القنوات، ولويحات تصلب صفراء بـ 4 ضربات، وزعيم الانسداد الأعظم بقوة 20 ضربة!"
+                        : "🏥 جراحة القلب المفتوح الكبرى: 10 مراحل حاسمة نهائية لاستعادة نشاط العقدة الجيبية الأذينية! جلطات مستشرية، ومواجهة زعيم الصمام الأخير بصحة 30 ضربة بتركيز حديدي!"
+                )}
               </p>
 
               {/* levels list */}
@@ -3022,13 +4129,16 @@ export default function App() {
                       : activeLevelTab === 'VASCULAR' 
                         ? (i + 61) 
                         : (i + 91);
-                  const isUnlocked = lNum <= maxUnlockedLevel;
-                  const isCompleted = lNum < maxUnlockedLevel || JSON.parse(localStorage.getItem('nabdah_completed_levels_v1') || '[]').includes(lNum);
+                  const isUnlocked = selectedCampaignTab === 'LIFESTYLE' ? lNum <= maxUnlockedLifestyleLevel : lNum <= maxUnlockedLevel;
+                  const isCompleted = selectedCampaignTab === 'LIFESTYLE' 
+                    ? (lNum < maxUnlockedLifestyleLevel || completedLifestyleLevels.includes(lNum)) 
+                    : (lNum < maxUnlockedLevel || JSON.parse(localStorage.getItem('nabdah_completed_levels_v1') || '[]').includes(lNum));
 
                   return (
                     <button
                       key={lNum}
                       disabled={!isUnlocked}
+                      type="button"
                       onClick={() => {
                         setSelectedLevelInfo(lNum);
                       }}
@@ -3037,13 +4147,15 @@ export default function App() {
                           ? 'bg-black/45 border-white/5 text-white/20 cursor-not-allowed opacity-50'
                           : isCompleted
                             ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400 hover:scale-[1.05] shadow-[0_0_10px_rgba(16,185,129,0.15)]'
-                            : activeLevelTab === 'MUTATED'
-                              ? 'bg-cyan-500/5 border-cyan-500/20 text-cyan-300 hover:border-cyan-400 hover:scale-[1.05]'
-                              : activeLevelTab === 'VASCULAR'
-                                ? 'bg-rose-500/5 border-rose-500/20 text-rose-400 hover:border-rose-450 hover:scale-[1.05]'
-                                : activeLevelTab === 'CARDIAC'
-                                  ? 'bg-emerald-500/5 border-emerald-500/20 text-emerald-350 hover:border-emerald-400 hover:scale-[1.05]'
-                                  : 'bg-white/5 border-white/10 text-white hover:border-red-500 hover:scale-[1.05]'
+                            : selectedCampaignTab === 'LIFESTYLE'
+                              ? 'bg-teal-500/5 border-teal-500/20 text-teal-300 hover:border-teal-400 hover:scale-[1.05]'
+                              : activeLevelTab === 'MUTATED'
+                                ? 'bg-cyan-500/5 border-cyan-500/20 text-cyan-300 hover:border-cyan-400 hover:scale-[1.05]'
+                                : activeLevelTab === 'VASCULAR'
+                                  ? 'bg-rose-500/5 border-rose-500/20 text-rose-400 hover:border-rose-450 hover:scale-[1.05]'
+                                  : activeLevelTab === 'CARDIAC'
+                                    ? 'bg-emerald-500/5 border-emerald-500/20 text-emerald-350 hover:border-emerald-400 hover:scale-[1.05]'
+                                    : 'bg-white/5 border-white/10 text-white hover:border-red-500 hover:scale-[1.05]'
                       }`}
                     >
                       {/* Status Check / Lock */}
@@ -3055,7 +4167,9 @@ export default function App() {
                           <Check className="w-3 h-3 text-emerald-400 shrink-0" />
                         </div>
                       ) : (
-                        <span className="text-[8px] text-white/40 tracking-tight font-mono mb-0.5">هدف: {getStageConfig(lNum).targetScore}</span>
+                        <span className="text-[8px] text-white/40 tracking-tight font-mono mb-0.5">
+                          هدف: {selectedCampaignTab === 'LIFESTYLE' ? getLifestyleStageConfig(lNum).targetScore : getStageConfig(lNum).targetScore}
+                        </span>
                       )}
                       <span className="text-sm font-black font-mono">{lNum}</span>
                       <span className="text-[7px] text-white/40 font-sans">مرحلة</span>
@@ -3082,24 +4196,29 @@ export default function App() {
 
               {/* Level Info Modal Overlay */}
               {selectedLevelInfo !== null && (() => {
-                const info = getStageDescription(selectedLevelInfo);
-                const config = getStageConfig(selectedLevelInfo);
+                const isL = selectedCampaignTab === 'LIFESTYLE';
+                const info = isL ? getLifestyleStageDescription(selectedLevelInfo) : getStageDescription(selectedLevelInfo);
+                const config = isL ? getLifestyleStageConfig(selectedLevelInfo) : getStageConfig(selectedLevelInfo);
                 return (
                   <div className="absolute inset-x-3 inset-y-4 bg-slate-950/98 bg-gradient-to-b from-slate-950/98 to-slate-900/98 backdrop-blur-xl rounded-2xl p-5 flex flex-col justify-between text-right animate-fade-in z-30 border-2 border-white/10" dir="rtl">
                     <div className="flex flex-col gap-3.5 overflow-y-auto pr-1">
                       <div className="flex justify-between items-center border-b border-white/10 pb-2">
-                        <h4 className="text-base font-black text-red-400 font-display">مهمة الإنعاش الإنعاشي #{selectedLevelInfo}</h4>
-                        <span className="text-[10px] bg-red-500/10 border border-red-500/20 text-red-400 px-2 py-0.5 rounded-full font-mono">تقرير التشخيص</span>
+                        <h4 className="text-base font-black text-emerald-400 font-display">
+                          {isL ? `مرحلة عادات القلب #${selectedLevelInfo}` : `مهمة الإنعاش الإنعاشي #${selectedLevelInfo}`}
+                        </h4>
+                        <span className={`text-[10px] border px-2 py-0.5 rounded-full font-mono ${isL ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-red-500/10 border-red-500/20 text-red-400'}`}>
+                          {isL ? 'تقرير السلوك اليومي' : 'تقرير التشخيص'}
+                        </span>
                       </div>
                       
                       <div className="space-y-3 font-sans">
                         <div>
                           <p className="text-[9px] text-white/50 uppercase font-bold tracking-widest mb-0.5">مسمى المرحلة:</p>
-                          <p className="text-sm font-extrabold text-white leading-snug">{info.title}</p>
+                          <p className={`text-sm font-extrabold leading-snug ${isL ? 'text-emerald-400' : 'text-white'}`}>{info.title}</p>
                         </div>
                         
                         <div>
-                          <p className="text-[9px] text-white/50 uppercase font-bold tracking-widest mb-0.5">نوعية التهديد النشط:</p>
+                          <p className="text-[9px] text-white/50 uppercase font-bold tracking-widest mb-0.5">العناصر النشطة في المرحلة:</p>
                           <p className="text-xs text-amber-400 font-bold leading-normal">{info.threats}</p>
                         </div>
                         
@@ -3109,13 +4228,15 @@ export default function App() {
                             <p className="text-xs font-black text-emerald-400 font-mono">+{config.targetScore} نقطة</p>
                           </div>
                           <div>
-                            <p className="text-[9px] text-white/40 font-bold">سرعة حركة التهديدات:</p>
+                            <p className="text-[9px] text-white/40 font-bold">وتيرة النزول والسرعة:</p>
                             <p className="text-xs font-black text-amber-400 font-sans">{info.speed}</p>
                           </div>
                         </div>
 
                         <div>
-                          <p className="text-[9px] text-white/50 uppercase font-bold tracking-widest mb-0.5">ملخص الحالة الطبية والتشخيص:</p>
+                          <p className="text-[9px] text-white/50 uppercase font-bold tracking-widest mb-0.5">
+                            {isL ? 'التوجيهات السلوكية والفوائد الصحية:' : 'ملخص الحالة الطبية والتشخيص:'}
+                          </p>
                           <p className="text-[11px] text-white/80 leading-relaxed font-sans">{info.desc}</p>
                         </div>
                       </div>
@@ -3127,11 +4248,15 @@ export default function App() {
                           const lvl = selectedLevelInfo;
                           setSelectedLevelInfo(null);
                           setShowLevelsView(false);
-                          startGame('LEVELS', lvl);
+                          startGame(isL ? 'LIFESTYLE' : 'LEVELS', lvl);
                         }}
-                        className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-extrabold text-xs shadow-lg hover:shadow-emerald-500/25 active:scale-95 transition-all text-center cursor-pointer"
+                        className={`flex-1 py-2.5 rounded-xl text-white font-extrabold text-xs shadow-lg active:scale-95 transition-all text-center cursor-pointer ${
+                          isL 
+                            ? 'bg-gradient-to-r from-emerald-500 to-teal-500 hover:shadow-emerald-500/25' 
+                            : 'bg-gradient-to-r from-red-500 to-rose-500 hover:shadow-red-500/25'
+                        }`}
                       >
-                        بدء العملية الإيقاعية ⚡
+                        {isL ? 'بدء تحدي نمط الحياة 🥗' : 'بدء العملية الإيقاعية ⚡'}
                       </button>
                       <button
                         onClick={() => setSelectedLevelInfo(null)}
@@ -3267,52 +4392,152 @@ export default function App() {
                 </div>
               </div>
 
+              {/* CARDIO GYM: صالة التمارين الرياضية لتقوية القلب */}
+              <div className="backdrop-blur-md bg-gradient-to-r from-red-950/40 to-amber-950/20 rounded-2xl border border-red-500/20 hover:border-red-500/40 p-4 text-right flex flex-col gap-3 transition-all relative overflow-hidden group">
+                <div className="absolute top-0 right-0 w-24 h-24 bg-red-500/10 rounded-full blur-2xl -mr-6 -mt-6" />
+                <div className="flex items-center justify-between z-10">
+                  <span className="text-[9px] font-mono text-amber-300 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-lg font-black">
+                    مستوى التدريبات الحالي: {Math.max(1, Math.round((sprintLevel + cyclingLevel + swimmingLevel + strengthLevel) / 4))} ⭐
+                  </span>
+                  <div className="flex items-center gap-1.5 text-[11px] font-black text-rose-450 uppercase tracking-wider">
+                    <Heart className="w-3.5 h-3.5 text-red-500 animate-pulse fill-current" />
+                    <span>صالة لياقة وقوة القلب الرياضية:</span>
+                  </div>
+                </div>
+                <p className="text-[10px] text-white/70 leading-relaxed font-sans z-10">
+                  ممارسة التدريبات في هذه الصالة تمنح قلبك <span className="text-amber-400 font-bold">قوة مضاعفة</span> ومقاومة فولاذية للأمراض ومسرعات الاستشفاء في كافة أطوار اللعب والزمالة!
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    audioSynthRef.current.playPerfectSound();
+                    setIsGymOpen(true);
+                  }}
+                  className="w-full bg-gradient-to-r from-red-650 to-amber-600 hover:from-red-550 hover:to-amber-500 text-white font-extrabold py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 outline-none shadow-[0_0_15px_rgba(239,68,68,0.25)] active:scale-[0.98] transition-all cursor-pointer text-xs font-semibold z-10"
+                >
+                  <Dumbbell className="w-4 h-4 text-white animate-bounce" />
+                  <span>دخول صالة التمارين وتقوية القلب 🏋️‍♂️</span>
+                </button>
+              </div>
+
               {/* Action Start Buttons */}
-              <div className="flex flex-col gap-2 mt-2">
-                <button
-                  id="start-levels-btn"
-                  onClick={() => setShowLevelsView(true)}
-                  className="w-full bg-gradient-to-r from-emerald-600 to-emerald-800 hover:from-emerald-500 hover:to-emerald-700 text-white font-bold py-3 px-6 rounded-xl flex items-center justify-center gap-2 outline-none border border-white/15 shadow-[0_0_15px_rgba(16,185,129,0.3)] active:scale-[0.98] transition-all cursor-pointer text-sm font-display font-medium"
-                >
-                  <Trophy className="w-4 h-4 text-white fill-current animate-pulse" />
-                  لعب طور المراحل الـ 90 (تطهير القلب والأوعية الدموية 🏆)
-                </button>
+              <div className="flex flex-col gap-5 mt-4 text-right">
+                
+                {/* CATEGORY 1: Campaigns */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-end gap-1 text-[11px] font-bold text-emerald-400/90 uppercase tracking-wider mb-1">
+                    <Trophy className="w-3.5 h-3.5" />
+                    <span>حملة المغامرة والقصة (مراحل إنعاش):</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      id="start-levels-btn"
+                      type="button"
+                      onClick={() => {
+                        setSelectedCampaignTab('MEDICAL');
+                        setShowLevelsView(true);
+                      }}
+                      className="bg-gradient-to-br from-emerald-950/80 to-emerald-920/40 hover:from-emerald-900 hover:to-emerald-850 text-white font-extrabold p-3 rounded-2xl flex flex-col items-center justify-center gap-1.5 outline-none border border-emerald-500/30 hover:border-emerald-500/60 shadow-[0_4px_12px_rgba(16,185,129,0.1)] active:scale-[0.97] transition-all cursor-pointer text-center group"
+                    >
+                      <Activity className="w-5 h-5 text-emerald-400 group-hover:scale-110 transition-transform animate-pulse" />
+                      <span className="text-[11px] sm:text-xs">المراحل الطبية</span>
+                      <span className="text-[8px] font-normal text-white/50 font-mono">100 مرحلة إنعاش</span>
+                    </button>
 
-                <button
-                  id="start-game-btn"
-                  onClick={() => startGame('ENDLESS')}
-                  className="w-full bg-gradient-to-r from-red-650 to-red-800 hover:from-red-550 hover:to-red-700 text-white font-bold py-3 px-6 rounded-xl flex items-center justify-center gap-2 outline-none border border-white/15 shadow-[0_0_15px_rgba(220,38,38,0.4)] active:scale-[0.98] transition-all cursor-pointer text-sm font-display font-medium"
-                >
-                  <Play className="w-4 h-4 fill-current text-white" />
-                  الوضع الفردي اللانهائي (البقاء)
-                </button>
+                    <button
+                      id="start-lifestyle-campaign-btn"
+                      type="button"
+                      onClick={() => {
+                        setSelectedCampaignTab('LIFESTYLE');
+                        setShowLevelsView(true);
+                      }}
+                      className="bg-gradient-to-br from-teal-950/80 to-teal-920/40 hover:from-teal-900 hover:to-teal-850 text-white font-extrabold p-3 rounded-2xl flex flex-col items-center justify-center gap-1.5 outline-none border border-teal-500/30 hover:border-teal-500/60 shadow-[0_4px_12px_rgba(20,184,166,0.1)] active:scale-[0.97] transition-all cursor-pointer text-center group"
+                    >
+                      <Sparkles className="w-5 h-5 text-teal-400 group-hover:scale-110 transition-transform animate-pulse" />
+                      <span className="text-[11px] sm:text-xs">نمط الحياة</span>
+                      <span className="text-[8px] font-normal text-white/50 font-mono">100 مرحلة سلوكية</span>
+                    </button>
+                  </div>
+                </div>
 
-                <button
-                  id="start-timed-btn"
-                  onClick={() => startGame('TIMED')}
-                  className="w-full bg-gradient-to-r from-amber-550 to-amber-700 hover:from-amber-450 hover:to-amber-600 text-slate-950 font-bold py-3 px-6 rounded-xl flex items-center justify-center gap-2 outline-none border border-white/15 shadow-[0_0_15px_rgba(251,191,36,0.3)] active:scale-[0.98] transition-all cursor-pointer text-sm font-display font-medium"
-                >
-                  <Zap className="w-4 h-4 fill-current text-slate-950" />
-                  تحدي الـ 60 ثانية (إنعاش سريع)
-                </button>
+                {/* CATEGORY 2: Arcade & Fast Survival */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-end gap-1 text-[11px] font-bold text-rose-450/90 uppercase tracking-wider mb-1">
+                    <Zap className="w-3.5 h-3.5 text-red-500 animate-pulse" />
+                    <span>تحديات البقاء الإيقاعية (الأركيد):</span>
+                  </div>
+                  
+                  <div className="flex flex-col gap-2">
+                    <button
+                      id="start-game-btn"
+                      type="button"
+                      onClick={() => startGame('ENDLESS')}
+                      className="w-full bg-gradient-to-r from-red-950/70 to-red-900/40 hover:from-red-900 hover:to-red-800 text-white font-bold py-2.5 px-4 rounded-xl flex items-center justify-between outline-none border border-red-500/20 hover:border-red-500/40 shadow-md active:scale-[0.98] transition-all cursor-pointer text-xs"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Play className="w-3.5 h-3.5 text-red-500 fill-current" />
+                        <span>الوضع الفردي اللانهائي (بقاء)</span>
+                      </div>
+                      <span className="text-[9px] text-white/40 font-mono bg-black/45 px-1.5 py-0.5 rounded border border-white/5">بقاء 🔥</span>
+                    </button>
 
-                <button
-                  id="start-splitscreen-btn"
-                  onClick={() => startSplitScreenGame('ENDLESS')}
-                  className="w-full bg-gradient-to-r from-violet-600 to-indigo-700 hover:from-violet-500 hover:to-indigo-600 text-white font-bold py-3 px-6 rounded-xl flex items-center justify-center gap-2 outline-none border border-white/15 shadow-[0_0_15px_rgba(139,92,246,0.3)] active:scale-[0.98] transition-all cursor-pointer text-sm font-display font-medium"
-                >
-                  <Users className="w-4 h-4 text-white" />
-                  تحدي شخصين (تقسيم الشاشة 👥)
-                </button>
+                    <button
+                      id="start-timed-btn"
+                      type="button"
+                      onClick={() => startGame('TIMED')}
+                      className="w-full bg-gradient-to-r from-amber-950/70 to-amber-900/40 hover:from-amber-900 hover:to-amber-800 text-white font-bold py-2.5 px-4 rounded-xl flex items-center justify-between outline-none border border-amber-500/20 hover:border-amber-500/40 shadow-md active:scale-[0.98] transition-all cursor-pointer text-xs"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Zap className="w-3.5 h-3.5 text-amber-500 fill-current" />
+                        <span>تحدي الـ 60 ثانية (إنعاش سريع)</span>
+                      </div>
+                      <span className="text-[9px] text-white/40 font-mono bg-black/45 px-1.5 py-0.5 rounded border border-white/5">تحدّي ⏱️</span>
+                    </button>
 
-                <button
-                  id="how-to-btn"
-                  onClick={() => setGameState('HOWTO')}
-                  className="w-full bg-white/5 hover:bg-white/10 text-white/80 font-medium py-2.5 px-6 rounded-xl flex items-center justify-center gap-2 outline-none border border-white/10 shadow transition-all cursor-pointer text-xs"
-                >
-                  <HelpCircle className="w-4 h-4 text-red-400" />
-                  كيف تلعب والتعليمات؟
-                </button>
+                    <button
+                      id="start-lifestyle-btn"
+                      type="button"
+                      onClick={() => startGame('LIFESTYLE')}
+                      className="w-full bg-gradient-to-r from-teal-950/70 to-teal-900/40 hover:from-teal-900 hover:to-teal-800 text-white font-bold py-2.5 px-4 rounded-xl flex items-center justify-between outline-none border border-teal-500/20 hover:border-teal-500/40 shadow-md active:scale-[0.98] transition-all cursor-pointer text-xs"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Heart className="w-3.5 h-3.5 text-teal-400" />
+                        <span>طور نمط الحياة اللانهائي المفتوح</span>
+                      </div>
+                      <span className="text-[9px] text-white/40 font-mono bg-black/45 px-1.5 py-0.5 rounded border border-white/5">تدريب 🥗</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* CATEGORY 3: Social & Coop */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-end gap-1 text-[11px] font-bold text-violet-400/90 uppercase tracking-wider mb-1">
+                    <Users className="w-3.5 h-3.5 text-violet-500" />
+                    <span>طور التحدي والمسعفين:</span>
+                  </div>
+                  
+                  <button
+                    id="start-splitscreen-btn"
+                    onClick={() => startSplitScreenGame('ENDLESS')}
+                    className="w-full bg-gradient-to-r from-violet-950/80 to-purple-900/45 hover:from-violet-900 hover:to-purple-800 text-white font-bold py-3 px-5 rounded-2xl flex items-center justify-center gap-2 outline-none border border-violet-500/20 hover:border-violet-500/45 shadow-[0_4px_15px_rgba(139,92,246,0.15)] active:scale-[0.98] transition-all cursor-pointer text-xs sm:text-sm font-semibold"
+                  >
+                    <Users className="w-4 h-4 text-violet-400 animate-pulse" />
+                    <span>تحدي شخصين (تقسيم الشاشة 👥)</span>
+                  </button>
+                </div>
+
+                {/* Info / Help button */}
+                <div className="pt-2 border-t border-white/5 flex gap-2">
+                  <button
+                    id="how-to-btn"
+                    onClick={() => setGameState('HOWTO')}
+                    className="flex-1 bg-white/[0.03] hover:bg-white/[0.08] text-white/70 font-medium py-2 px-4 rounded-xl flex items-center justify-center gap-1.5 outline-none border border-white/5 hover:border-white/10 transition-all cursor-pointer text-xs"
+                  >
+                    <HelpCircle className="w-4 h-4 text-slate-400" />
+                    <span>كيف تلعب والتعليمات؟</span>
+                  </button>
+                </div>
+
               </div>
 
               {/* MINI LEADERBOARD BAR */}
@@ -3683,7 +4908,7 @@ export default function App() {
                   <div className="space-y-1.5 backdrop-blur-md bg-amber-500/5 p-3 rounded-2xl border border-amber-500/20 text-right animate-fade-in">
                     <div className="flex justify-between items-center text-[10px] font-mono px-1">
                       <span className="text-amber-400 font-bold uppercase tracking-wider">المؤقت التنازلي للتحدي (COUNTDOWN)</span>
-                      <span className={`font-mono font-bold text-xs py-0.5 px-2 rounded-md ${timeLeft <= 10 ? 'text-red-405 animate-pulse bg-red-550/10 border border-red-500/25' : 'text-amber-400 bg-amber-500/10 border border-amber-500/25'}`}>
+                      <span className={`font-mono font-bold text-xs py-0.5 px-2 rounded-md ${timeLeft <= 10 ? 'text-red-400 animate-pulse bg-red-550/10 border border-red-500/25' : 'text-amber-400 bg-amber-500/10 border border-amber-500/25'}`}>
                         {timeLeft} ثانية
                       </span>
                     </div>
@@ -3717,6 +4942,34 @@ export default function App() {
                         ⚠️ تحذير: تظهر البكتيريا الكبيرة (تتطلب 3 ضربات) وتستدعي بكتيريا أصغر (تتطلب ضربتين)!
                       </div>
                     )}
+                  </div>
+                )}
+
+                {gameMode === 'LIFESTYLE' && (
+                  <div className="space-y-2 backdrop-blur-md bg-teal-500/5 p-3 rounded-2xl border border-teal-500/20 text-right animate-fade-in">
+                    <div className="flex justify-between items-center text-[10px] font-mono px-1">
+                      <span className="text-teal-400 font-bold uppercase tracking-wider flex items-center gap-1">
+                        🥗 عدد المحاولات والأرواح (HEART LIVES)
+                      </span>
+                      <span className="text-teal-400 font-bold bg-teal-500/10 border border-teal-500/25 px-2 py-0.5 rounded-md">
+                        {Math.ceil(heartHealth / 20)} / 5 أرواح
+                      </span>
+                    </div>
+                    {/* Render Hearts */}
+                    <div className="flex justify-end gap-1 text-sm">
+                      {Array.from({ length: 5 }).map((_, index) => {
+                        const scoreLife = Math.ceil(heartHealth / 20);
+                        return (
+                          <span key={index} className="transition-all duration-300">
+                            {index < scoreLife ? '❤️' : '🖤'}
+                          </span>
+                        );
+                      })}
+                    </div>
+                    <div className="text-[10px] text-teal-400/80 leading-relaxed border-t border-teal-550/10 pt-1.5 mt-1">
+                      <div>🚨 <strong className="text-rose-450">دمّر بالضرب المباشر:</strong> برجر 🍔، ملح 🧂، سجائر 🚬، توتر 😰</div>
+                      <div className="mt-0.5">⭐ <strong className="text-emerald-400">اترك للقلب لتغذيته:</strong> تفاحة 🍎، ماء 💧</div>
+                    </div>
                   </div>
                 )}
 
@@ -3860,30 +5113,33 @@ export default function App() {
                   </div>
                 )}
 
-                {/* Session statistics */}
-                <div className="backdrop-blur-md bg-white/5 p-4 rounded-2xl border border-white/10 text-right space-y-3">
-                  <h4 className="text-[10px] uppercase tracking-widest text-white/40 font-bold border-b border-white/5 pb-1.5 font-sans">تقرير الكفاءة الحيوية للمسعف:</h4>
-                  
-                  <div className="flex justify-between items-center text-xs">
-                    <span className="text-white/60">الاسم الرمزي للمسعف:</span>
-                    <span className="font-bold text-white">{playerName || 'لاعب نبضة'}</span>
-                  </div>
-                  
-                  <div className="flex justify-between items-center text-xs">
-                    <span className="text-white/60">إجمالي النقاط المسجلة:</span>
-                    <span className="font-mono font-bold text-red-500 text-base">{score} <span className="text-[10px] font-normal text-white/50_at_center">نقطة</span></span>
-                  </div>
-
-                  <div className="flex justify-between items-center text-xs">
-                    <span className="text-white/60">الضربات المتتالية (Max Combo):</span>
-                    <span className="font-mono font-bold text-amber-500">{maxCombo} متتالية</span>
-                  </div>
-
-                  <div className="flex justify-between items-center text-xs">
-                    <span className="text-white/60">نسبة التطابق الإيقاعي البيرفكت:</span>
-                    <span className="font-mono font-bold text-cyan-400">{calculatedAcc}%</span>
-                  </div>
-                </div>
+                 {/* Session statistics */}
+                 <div className="backdrop-blur-md bg-white/5 p-4 rounded-2xl border border-white/10 text-right space-y-3 shadow-inner">
+                   <h4 className="text-[10px] uppercase tracking-widest text-[#f87171] font-bold border-b border-white/10 pb-1.5 font-mono flex justify-end items-center gap-1">
+                     <span>• CLINICAL DIAGNOSIS REPORT</span>
+                     <Activity className="w-3 h-3 text-[#f87171] animate-pulse" />
+                   </h4>
+                   
+                   <div className="flex justify-between items-center text-xs pb-1 border-b border-white/[0.03]">
+                     <span className="text-white/60">الاسم الرمزي للمسعف:</span>
+                     <span className="font-bold text-white bg-white/5 px-2 py-0.5 rounded border border-white/5">{playerName || 'لاعب نبضة'}</span>
+                   </div>
+                   
+                   <div className="flex justify-between items-center text-xs pb-1 border-b border-white/[0.03]">
+                     <span className="text-white/60">إجمالي النقاط المسجلة:</span>
+                     <span className="font-mono font-black text-red-500 text-base">{score} <span className="text-[10px] font-normal text-white/50">نقطة</span></span>
+                   </div>
+ 
+                   <div className="flex justify-between items-center text-xs pb-1 border-b border-white/[0.03]">
+                     <span className="text-white/60">الضربات المتتالية (Max Combo):</span>
+                     <span className="font-mono font-bold text-amber-500">{maxCombo} متتالية</span>
+                   </div>
+ 
+                   <div className="flex justify-between items-center text-xs">
+                     <span className="text-white/60">نسبة التطابق الإيقاعي البيرفكت:</span>
+                     <span className="font-mono font-bold text-cyan-400">{calculatedAcc}%</span>
+                   </div>
+                 </div>
 
                 {/* D3-based Cardiac Rate (BPM) Progression Chart */}
                 <BpmHistoryChart history={bpmHistory} />
@@ -3903,10 +5159,10 @@ export default function App() {
                       <span className="font-bold text-red-400">{item.score}</span>
                       <span className="text-[10px] text-white/30 font-sans">({item.accuracy}%)</span>
                       <span className="text-[9px] text-white/40 font-sans px-1 bg-white/5 rounded-md border border-white/5">
-                        {item.gameMode === 'TIMED' ? '⏱️ تحدي' : '♾️ بقاء'}
+                        {item.gameMode === 'TIMED' ? '⏱️ تحدي' : item.gameMode === 'LIFESTYLE' ? '🥗 نمط الحياة' : item.gameMode === 'LEVELS' ? '🏆 مراحل' : '♾️ بقاء'}
                       </span>
                     </div>
-                    <span className={`text-white/80 ${item.playerName === playerName ? 'font-bold text-red-405' : ''}`}>
+                    <span className={`text-white/80 ${item.playerName === playerName ? 'font-bold text-red-400' : ''}`}>
                       {idx + 1}. {item.playerName} {item.playerName === playerName && '⭐'}
                     </span>
                   </div>
@@ -3955,11 +5211,21 @@ export default function App() {
             </div>
 
             {/* Victory card */}
-            <div className="p-5 backdrop-blur-md bg-emerald-500/10 border border-emerald-500/30 rounded-3xl flex flex-col items-center gap-3.5 shadow-[0_0_35px_rgba(16,185,129,0.25)] animate-fade-in text-center">
-              <Trophy className="w-12 h-12 text-emerald-400 animate-bounce" />
-              <h3 className="text-2xl font-black text-emerald-400 font-display">اكتمل تطهير صمام القلب بنجاح! 🎉</h3>
+            <div className={`p-5 backdrop-blur-md border rounded-3xl flex flex-col items-center gap-3.5 shadow-xl animate-fade-in text-center ${
+              gameMode === 'LIFESTYLE' 
+                ? 'bg-teal-500/10 border-teal-500/30 shadow-teal-500/5'
+                : 'bg-emerald-500/10 border-emerald-500/30 shadow-emerald-500/5'
+            }`}>
+              <Trophy className={`w-12 h-12 animate-bounce ${gameMode === 'LIFESTYLE' ? 'text-teal-400' : 'text-emerald-400'}`} />
+              <h3 className={`text-xl sm:text-2xl font-black font-display ${gameMode === 'LIFESTYLE' ? 'text-teal-400' : 'text-emerald-400'}`}>
+                {gameMode === 'LIFESTYLE' ? 'اكتمل تحدي نمط الحياة والتطهير! 🥗' : 'اكتمل تطهير صمام القلب بنجاح! 🎉'}
+              </h3>
               <p className="text-xs text-white/80 leading-relaxed px-2">
-                عمل بطولي يا دكتور! لقد طهرت الأوعية الدموية بالكامل ونظّمت صمامات المريض في المرحلة <span className="text-emerald-400 font-bold font-mono text-base">{currentLevel}</span> ليركض قلبه بنبض سليم.
+                {gameMode === 'LIFESTYLE' ? (
+                  <>عمل صحّي وبطولي! لقد حميت القلب وعوضت العناصر المغذية وطهرت المريض من السلوكيات السيئة في المرحلة <span className="text-teal-400 font-bold font-mono text-base">{currentLevel}</span> ليركض قلبه بنبض مفعم بالصحة والنشاط.</>
+                ) : (
+                  <>عمل بطولي يا دكتور! لقد طهرت الأوعية الدموية بالكامل ونظّمت صمامات المريض في المرحلة <span className="text-emerald-400 font-bold font-mono text-base">{currentLevel}</span> ليركض قلبه بنبض سليم.</>
+                )}
               </p>
             </div>
 
@@ -3968,13 +5234,15 @@ export default function App() {
               <h4 className="text-[10px] uppercase tracking-widest text-white/40 font-bold border-b border-white/5 pb-1.5 font-sans">تقرير كفاءة إنقاذ المرحلة:</h4>
               
               <div className="flex justify-between items-center text-xs">
-                <span className="text-white/60">المرحلة المنجزة:</span>
-                <span className="font-bold text-white font-mono">مرحلة {currentLevel} من أصل 60</span>
+                <span className="text-white/60 font-sans">المرحلة المنجزة:</span>
+                <span className={`font-bold font-mono ${gameMode === 'LIFESTYLE' ? 'text-teal-400' : 'text-emerald-400'}`}>
+                  {gameMode === 'LIFESTYLE' ? `مرحلة عادات القلب ${currentLevel} من أصل 100` : `مرحلة الإنعاش الطبي ${currentLevel} من أصل 100`}
+                </span>
               </div>
               
               <div className="flex justify-between items-center text-xs">
                 <span className="text-white/60">النقاط التي تجمعت:</span>
-                <span className="font-mono font-bold text-emerald-400 text-sm">{score} نقطة</span>
+                <span className={`font-mono font-bold text-sm ${gameMode === 'LIFESTYLE' ? 'text-teal-400' : 'text-emerald-400'}`}>{score} نقطة</span>
               </div>
 
               <div className="flex justify-between items-center text-xs">
@@ -3990,23 +5258,31 @@ export default function App() {
 
             {/* Navigation options */}
             <div className="flex flex-col gap-2.5 mt-2">
-              {currentLevel < 60 ? (
+              {currentLevel < 100 ? (
                 <button
                   id="next-level-btn"
-                  onClick={() => startGame('LEVELS', currentLevel + 1)}
-                  className="w-full bg-gradient-to-r from-emerald-600 to-green-700 text-white font-bold py-3 px-6 rounded-xl flex items-center justify-center gap-2 outline-none border border-white/10 hover:shadow-[0_0_15px_rgba(16,185,129,0.5)] active:scale-[0.98] transition-all cursor-pointer text-sm font-display font-medium"
+                  onClick={() => startGame(gameMode, currentLevel + 1)}
+                  className={`w-full text-white font-bold py-3 px-6 rounded-xl flex items-center justify-center gap-2 outline-none border border-white/10 active:scale-[0.98] transition-all cursor-pointer text-xs sm:text-sm font-display font-semibold ${
+                    gameMode === 'LIFESTYLE'
+                      ? 'bg-gradient-to-r from-teal-600 to-emerald-600 hover:shadow-[0_0_15px_rgba(20,184,166,0.35)]'
+                      : 'bg-gradient-to-r from-emerald-600 to-green-700 hover:shadow-[0_0_15px_rgba(16,185,129,0.35)]'
+                  }`}
                 >
                   الذهاب إلى المرحلة التالية ({currentLevel + 1}) ⏩
                 </button>
               ) : (
                 <div className="py-2.5 px-4 bg-amber-500/10 border border-amber-500/35 text-amber-400 text-xs rounded-xl font-bold">
-                  🎖️ أهلاً بك في صف الرائد الإيقاعي! لقد أكملت جميع المراحل الـ 60 بنجاح فائق وتغلبت على الطفرة السيبرانية الحيوية!
+                  {gameMode === 'LIFESTYLE' ? (
+                    "🎖️ أهلاً بك في صف الأصحّاء الأبرار! لقد أكملت جميع مراحل نمط الحياة الـ 100 بنجاح فائق وتغلبت على جميع السلوكيات والعادات السلبية الحيوية!"
+                  ) : (
+                    "🎖️ أهلاً بك في صف الرائد الإيقاعي! لقد أكملت جميع المراحل الـ 100 بنجاح فائق وتغلبت على جميع التحديات وطفرات الجراجة السيبرانية!"
+                  )}
                 </div>
               )}
 
               <button
                 id="replay-level-btn"
-                onClick={() => startGame('LEVELS', currentLevel)}
+                onClick={() => startGame(gameMode, currentLevel)}
                 className="w-full bg-white/5 hover:bg-white/10 text-white font-medium py-2.5 px-6 rounded-xl flex items-center justify-center gap-2 outline-none border border-white/10 transition-all cursor-pointer text-xs"
               >
                 إعادة تشغيل المرحلة الحالية {currentLevel}
@@ -4018,7 +5294,7 @@ export default function App() {
                   setGameState('START');
                   setShowLevelsView(true);
                 }}
-                className="w-full bg-white/5 hover:bg-white/10 text-white/70 font-medium py-2.5 px-6 rounded-xl flex items-center justify-center gap-2 outline-none border border-white/10 transition-all cursor-pointer text-xs"
+                className="w-full bg-white/5 hover:bg-white/10 text-white/75 font-medium py-2.5 px-6 rounded-xl flex items-center justify-center gap-2 outline-none border border-white/10 transition-all cursor-pointer text-xs"
               >
                 العودة لقائمة مستويات الخريطة 🗺️
               </button>

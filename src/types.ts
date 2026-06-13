@@ -22,7 +22,19 @@ export enum NodeType {
   ARTERIAL_CLOT = 'ARTERIAL_CLOT',           // Critical blood clot in the red arteries (3-hits, gets bigger as it nears heart)
   VEIN_THROMBUS = 'VEIN_THROMBUS',           // Sleek dark blue thrombus sliding in the veins (fast, 2-hits, zigzags)
   ATHEROMA_PLAQUE = 'ATHEROMA_PLAQUE',       // Golden fatty plaque blocking blood vessels (needs 4 heavy taps)
-  CORONARY_EMBOLUS_BOSS = 'CORONARY_EMBOLUS_BOSS' // The sovereign Pulmonary/Coronary embolus blocking all valves (Level 90, 20 hits!)
+  CORONARY_EMBOLUS_BOSS = 'CORONARY_EMBOLUS_BOSS', // The sovereign Pulmonary/Coronary embolus blocking all valves (Level 90, 20 hits!)
+  LIFESTYLE_BURGER = 'LIFESTYLE_BURGER',     // Fatty burger (harmful lifestyle element)
+  LIFESTYLE_SALT = 'LIFESTYLE_SALT',         // Salt/Chips (harmful lifestyle element)
+  LIFESTYLE_CIGARETTE = 'LIFESTYLE_CIGARETTE', // Cigarette (harmful lifestyle element)
+  LIFESTYLE_STRESS = 'LIFESTYLE_STRESS',     // Stress (harmful lifestyle element)
+  LIFESTYLE_APPLE = 'LIFESTYLE_APPLE',       // Apple (healthy lifestyle element)
+  LIFESTYLE_WATER = 'LIFESTYLE_WATER',        // Water (healthy lifestyle element)
+  LIFESTYLE_DOUBLE_BURGER = 'LIFESTYLE_DOUBLE_BURGER', // Double fat burger (2 hits, harmful)
+  LIFESTYLE_DOUBLE_SALT = 'LIFESTYLE_DOUBLE_SALT',     // Double salt/sodium overdose (2 hits, harmful)
+  LIFESTYLE_LATE_NIGHT = 'LIFESTYLE_LATE_NIGHT',       // Late nights/Sleeplessness (fast, zigzags, harmful)
+  LIFESTYLE_SEDENTARY = 'LIFESTYLE_SEDENTARY',         // Lack of exercise/Couch potato (3 hits, grows bigger, harmful)
+  LIFESTYLE_SLEEP = 'LIFESTYLE_SLEEP',                 // Adequate sleep (heals, gives points, healthy)
+  LIFESTYLE_EXERCISE = 'LIFESTYLE_EXERCISE'           // Sports & Exercise (gives big speed/points, healthy)
 }
 
 export interface GameNode {
@@ -78,7 +90,7 @@ export interface ScoreRecord {
   accuracy: number;
   date: string;
   playerName: string;
-  gameMode?: 'ENDLESS' | 'TIMED';
+  gameMode?: 'ENDLESS' | 'TIMED' | 'LEVELS' | 'LIFESTYLE';
 }
 
 export type GameState = 'START' | 'PLAYING' | 'GAMEOVER' | 'HOWTO' | 'LEVEL_COMPLETE';

@@ -38,6 +38,34 @@
           "type": "array",
           "description": "List of level numbers completed by the user"
         },
+        "maxUnlockedLifestyleLevel": {
+          "type": "integer",
+          "description": "Highest level unlocked by the user in lifestyle campaign (up to 100)"
+        },
+        "completedLifestyleLevels": {
+          "type": "array",
+          "description": "List of level numbers completed by the user in lifestyle campaign"
+        },
+        "gymPoints": {
+          "type": "integer",
+          "description": "Experience points gained by performing sports training in the cardio gym"
+        },
+        "sprintLevel": {
+          "type": "integer",
+          "description": "Treadmill sprint level providing heart shields/strength"
+        },
+        "cyclingLevel": {
+          "type": "integer",
+          "description": "High resistance cycling level lengthening pacemakers duration"
+        },
+        "swimmingLevel": {
+          "type": "integer",
+          "description": "Breathing & swimming level doubling health recovery recovery of items"
+        },
+        "strengthLevel": {
+          "type": "integer",
+          "description": "Dumbbells strength level causing taps to clear cells twice as fast"
+        },
         "updatedAt": {
           "type": "string",
           "description": "Server timestamp when profile was modified"
