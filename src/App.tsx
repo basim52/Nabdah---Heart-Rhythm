@@ -179,6 +179,7 @@ export default function App() {
   const [isSpinning, setIsSpinning] = useState<boolean>(false);
   const [spinAnimationDegree, setSpinAnimationDegree] = useState<number>(0);
   const [spinRewardMsg, setSpinRewardMsg] = useState<string>('');
+  const [showExitConfirm, setShowExitConfirm] = useState<boolean>(false);
 
   // Arabic Heart Safety Tips (≤ 4 words) - For displaying non-disruptive medical tips between levels
   const HEART_TIPS = [
@@ -3632,6 +3633,7 @@ export default function App() {
     // Reset Stats
     setHeartHealth(100);
     setScore(0);
+    setShowExitConfirm(false);
     setDefibrillatorUsed(false);
     setIsDefibrillatorActive(false);
     setDefibrillatorCharge(0);
@@ -3718,7 +3720,7 @@ export default function App() {
     if (isSplitScreen) {
       startSplitScreenGame(gameMode);
     } else {
-      startGame(gameMode);
+      startGame(gameMode, currentLevel > 0 ? currentLevel : undefined);
     }
   };
 
@@ -5236,6 +5238,51 @@ export default function App() {
         {gameState === 'PLAYING' && (
           <div id="playing-module" className="flex flex-col gap-4 animate-fade-in font-sans relative">
             
+            {/* Safe Top Status & Emergency Exit/Aborting Bar */}
+            <div className="flex justify-between items-center bg-white/[0.03] border border-white/10 px-3 py-2 rounded-2xl text-[11px] font-sans shadow-md">
+              <div className="flex items-center gap-1.5 text-white/80">
+                <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+                <span className="font-semibold text-[10px] tracking-wide">
+                  {gameMode === 'LIFESTYLE' ? '🥗 نمط الحياة وعادات القلب' : gameMode === 'TIMED' ? '⏱️ التحدي الإيقاعي الزمني' : gameMode === 'LEVELS' ? '🏆 الإنعاش الطبي والمنظم' : '♾️ البقاء الإيقاعي اللانهائي'}
+                  {currentLevel > 0 && ` - مستوى ${currentLevel}`}
+                </span>
+              </div>
+              
+              {!showExitConfirm ? (
+                <button
+                  type="button"
+                  id="playing-exit-request"
+                  onClick={() => setShowExitConfirm(true)}
+                  className="text-[10px] text-red-400 hover:text-red-300 transition-all font-bold bg-red-950/40 px-2 py-1 rounded-lg border border-red-500/20 active:scale-95 cursor-pointer flex items-center gap-1"
+                >
+                  <span>مغادرة الجلسة 🚪</span>
+                </button>
+              ) : (
+                <div className="flex items-center gap-1.5 animate-fade-in">
+                  <span className="text-[9px] text-amber-400 font-bold">تأكيد الخروج؟</span>
+                  <button
+                    type="button"
+                    id="playing-exit-yes"
+                    onClick={() => {
+                      setShowExitConfirm(false);
+                      handleGameOver();
+                    }}
+                    className="text-[9px] text-white font-bold bg-red-650 px-2 py-1 rounded border border-red-500 active:scale-95 cursor-pointer"
+                  >
+                    نعم
+                  </button>
+                  <button
+                    type="button"
+                    id="playing-exit-no"
+                    onClick={() => setShowExitConfirm(false)}
+                    className="text-[9px] text-white/70 font-semibold bg-white/5 hover:bg-white/10 px-1.5 py-1 rounded border border-white/10 active:scale-95 cursor-pointer"
+                  >
+                    إلغاء
+                  </button>
+                </div>
+              )}
+            </div>
+
             {isDefibrillatorActive && (
               <div id="defibrillator-overlay" className="absolute inset-0 bg-[#0c0202]/98 z-50 rounded-3xl p-5 flex flex-col justify-between overflow-hidden border border-red-500/30 animate-fade-in shadow-[0_0_50px_rgba(239,68,68,0.25)] min-h-[500px]">
                 
@@ -5627,16 +5674,6 @@ export default function App() {
                 />
               </>
             )}
-
-            {/* Pause & emergency abort trigger */}
-            <div className="flex justify-center mt-2">
-              <button
-                onClick={handleGameOver}
-                className="text-[10px] text-red-500 hover:text-red-400 hover:underline transition-all font-mono"
-              >
-                [ قطع الاتصال بالنبض ومغادرة الجلسة ]
-              </button>
-            </div>
           </div>
         )}
 
